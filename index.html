@@ -800,42 +800,41 @@ function parseItems() {
     map[name] = (map[name]||0) + qty;
   }
 
-  // Build mergedItems — expand items that were previously cached as enhance into individual rows
+  // Build mergedItems — 全アイテムを1個ずつ展開
   S.mergedItems = [];
   let totalQty = 0;
   for (const [name, qty] of Object.entries(map)) {
     totalQty += qty;
     const cached = S.priceCache[name] || {};
-    const wasEnhance = !!(cached.enhanceTag);
 
-    if (wasEnhance) {
-      // Expand each unit as separate item entry
+    if (qty === 1) {
+      // 1個のみはそのまま
+      const unitCache = (cached.units || [])[0] || {};
+      S.mergedItems.push({
+        name, qty: 1,
+        unitIndex: 0, totalQty: 1,
+        price: cached.price ?? 0,
+        enhanceTag: unitCache.enhanceTag ?? cached.enhanceTag ?? '',
+        isEquip: cached.isEquip ?? false,
+        equipStatus: unitCache.unitStatus ?? cached.equipStatus ?? '',
+        unitStatus: unitCache.unitStatus ?? '',
+        _expandedUnit: false,
+      });
+    } else {
+      // 2個以上は全て1個ずつ展開
       for (let u = 0; u < qty; u++) {
         const unitCache = (cached.units || [])[u] || {};
         S.mergedItems.push({
-          name,
-          qty: 1,
-          unitIndex: u,   // which unit this is (for display)
-          totalQty: qty,  // total qty of this name (for display "#1 of N")
+          name, qty: 1,
+          unitIndex: u, totalQty: qty,
           price: cached.price ?? 0,
           enhanceTag: unitCache.enhanceTag ?? cached.enhanceTag ?? '',
-          isEquip: false,
-          equipStatus: '',
+          isEquip: cached.isEquip ?? false,
+          equipStatus: unitCache.unitStatus ?? cached.equipStatus ?? '',
           unitStatus: unitCache.unitStatus ?? '',
           _expandedUnit: true,
         });
       }
-    } else {
-      S.mergedItems.push({
-        name, qty,
-        unitIndex: 0, totalQty: qty,
-        price: cached.price ?? 0,
-        enhanceTag: '',
-        isEquip: cached.isEquip ?? false,
-        equipStatus: cached.equipStatus ?? '',
-        unitStatus: '',
-        _expandedUnit: false,
-      });
     }
   }
 
@@ -950,12 +949,15 @@ function updateItemStatus(i, val) {
 // STEP 3: SELECT TABLE
 // ═══════════════════════════════════════════════
 function renderSelTable() {
-  // Only non-enhance, non-equip items. Group by name for display.
   const eligible = S.mergedItems.filter(it => !it.enhanceTag && !it.isEquip);
-  // Deduplicate by name (they all have qty=original for non-expanded items)
-  const seen = new Set();
-  const deduped = eligible.filter(it => { if(seen.has(it.name)) return false; seen.add(it.name); return true; });
-  const sorted = [...deduped].sort((a,b)=>(a.price*a.qty)-(b.price*b.qty));
+  // 同名をまとめて数量合計
+  const nameMap = {};
+  for (const it of eligible) {
+    if (!nameMap[it.name]) nameMap[it.name] = { ...it, qty: 0 };
+    nameMap[it.name].qty += it.qty;
+  }
+  const deduped = Object.values(nameMap);
+  const sorted = deduped.sort((a,b)=>(a.price*a.qty)-(b.price*b.qty));
   document.getElementById('sel-tbody').innerHTML = sorted.length ? sorted.map(item => `
     <tr>
       <td><input type="checkbox" ${S.selectedNames.has(item.name)?'checked':''}
