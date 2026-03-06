@@ -905,11 +905,17 @@ function updateItemPrice(i, val) {
   const v = val === '' ? 0 : parseFloat(val);
   if (isNaN(v)) return;
   const name = S.mergedItems[i].name;
+  // 同名の全行に価格を反映
   S.mergedItems.forEach((it, idx) => {
     if (it.name === name) {
       it.price = v;
       const totEl = document.getElementById('pr-total-'+idx);
       if (totEl) totEl.textContent = fmt(v * it.qty) + ' ◇';
+      // 入力欄も同期（自分以外）
+      if (idx !== i) {
+        const inputEl = document.querySelector(`#pr-row-${idx} input[type=number]`);
+        if (inputEl) inputEl.value = v;
+      }
     }
   });
   _saveItemCache(i);
