@@ -1,0 +1,1554 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YMIR クランアイテム分配ツール v2</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=M+PLUS+1p:wght@300;400;500;700&display=swap');
+:root {
+  --bg:#080a10;--s1:#0f1219;--s2:#161b28;--s3:#1e2535;
+  --border:#252d42;--border2:#2f3a54;
+  --gold:#d4a843;--gold2:#f0cc70;--gold3:#8a6820;
+  --blue:#4a8fd4;--blue2:#7ab8f0;
+  --purple:#8b5cf6;--purple2:#b39ddb;
+  --green:#3dba7a;--red:#e05252;
+  --text:#cdd5ec;--dim:#5a6580;--dim2:#8090b0;
+  --font:'M PLUS 1p',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 10% 10%,rgba(74,143,212,.05),transparent),radial-gradient(ellipse 50% 50% at 90% 90%,rgba(212,168,67,.04),transparent);pointer-events:none;z-index:0}
+
+/* LAYOUT */
+.layout{display:flex;height:100vh;position:relative;z-index:1}
+.sidebar{width:220px;min-width:220px;background:var(--s1);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.main{flex:1;overflow-y:auto;padding:24px 28px}
+
+/* SIDEBAR */
+.logo{padding:20px 16px 14px;border-bottom:1px solid var(--border)}
+.logo h1{font-family:'Cinzel',serif;font-size:13px;font-weight:900;background:linear-gradient(135deg,var(--gold),var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:2px}
+.logo p{font-size:10px;color:var(--dim);margin-top:3px;letter-spacing:1px}
+.nav{padding:12px 8px;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--dim2);transition:all .15s;margin-bottom:2px;border:1px solid transparent}
+.nav-item:hover{background:var(--s2);color:var(--text)}
+.nav-item.active{background:var(--s2);border-color:var(--border2);color:var(--gold)}
+.nav-item .n-icon{font-size:14px;width:18px;text-align:center}
+.nav-item .n-badge{margin-left:auto;background:var(--gold3);color:var(--gold2);font-size:9px;font-weight:700;border-radius:10px;padding:1px 6px}
+.nav-sep{height:1px;background:var(--border);margin:8px 4px}
+.nav-label{font-size:10px;color:var(--dim);letter-spacing:2px;padding:6px 12px 4px;text-transform:uppercase}
+
+/* PANEL */
+.panel{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
+.panel-hd{font-family:'Cinzel',serif;font-size:12px;color:var(--gold);letter-spacing:2px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.page-title{font-family:'Cinzel',serif;font-size:18px;font-weight:900;color:var(--text);margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.page-title .t-icon{font-size:20px}
+
+/* FORM */
+textarea,input[type=text],input[type=number],select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:13px;padding:8px 11px;outline:none;transition:border-color .15s}
+textarea:focus,input:focus,select:focus{border-color:var(--blue)}
+textarea{resize:vertical;min-height:140px}
+select option{background:var(--s2)}
+label{display:block;color:var(--dim2);font-size:11px;margin-bottom:5px}
+.field{margin-bottom:14px}
+.row{display:flex;gap:10px;align-items:flex-start}
+.row .field{flex:1}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:6px;border:none;font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#080a10;font-weight:700}
+.btn-gold:hover{filter:brightness(1.12);transform:translateY(-1px)}
+.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text)}
+.btn-ghost:hover{border-color:var(--blue);color:var(--blue)}
+.btn-danger{background:var(--red);color:#fff}
+.btn-danger:hover{filter:brightness(1.1)}
+.btn-green{background:var(--green);color:#080a10;font-weight:700}
+.btn-green:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.btn-sm{padding:5px 11px;font-size:11px}
+.btn-xs{padding:3px 8px;font-size:10px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important}
+
+/* TABLE */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{background:var(--bg);color:var(--dim2);font-size:10px;font-weight:500;text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);letter-spacing:1px;white-space:nowrap}
+.tbl td{padding:7px 10px;border-bottom:1px solid rgba(37,45,66,.6);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(255,255,255,.02)}
+.tbl input[type=number]{width:88px}
+.tbl input[type=checkbox]{width:15px;height:15px;accent-color:var(--gold);cursor:pointer}
+.tbl-wrap{overflow-x:auto}
+
+/* TAGS */
+.tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.5px}
+.tag-job{background:rgba(139,92,246,.2);color:#c4b5fd;border:1px solid rgba(139,92,246,.4)}
+.tag-enhance{background:rgba(74,143,212,.15);color:var(--blue2);border:1px solid rgba(74,143,212,.3)}
+.tag-enhance-gold{background:rgba(212,168,67,.15);color:var(--gold2);border:1px solid rgba(212,168,67,.35)}
+.tag-enhance-up{background:rgba(224,82,82,.15);color:#ff8a80;border:1px solid rgba(224,82,82,.3)}
+.tag-equip{background:rgba(61,186,122,.15);color:#80ffb8;border:1px solid rgba(61,186,122,.3)}
+.tag-low{background:rgba(61,186,122,.12);color:var(--green)}
+.tag-high{background:rgba(212,168,67,.12);color:var(--gold)}
+
+/* CHIPS */
+.chip-list{display:flex;flex-wrap:wrap;gap:6px;min-height:32px;padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px}
+.chip{display:flex;align-items:center;gap:5px;border-radius:20px;padding:4px 11px;font-size:12px}
+.chip-member{background:var(--s3);border:1px solid var(--border2)}
+.chip-job{background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.35);color:#c4b5fd}
+.chip button{background:none;border:none;cursor:pointer;color:var(--dim2);font-size:12px;line-height:1;padding:0;transition:color .15s}
+.chip button:hover{color:var(--red)}
+
+/* MEMBER CARD */
+.member-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.member-card{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;cursor:pointer;transition:all .15s;position:relative}
+.member-card:hover{border-color:var(--border2)}
+.member-card.selected{border-color:var(--gold);background:rgba(212,168,67,.06)}
+.member-card .mc-name{font-weight:700;font-size:14px;margin-bottom:4px}
+.member-card .mc-job{font-size:11px;color:var(--dim2)}
+.member-card .mc-check{position:absolute;top:10px;right:10px;width:18px;height:18px;border-radius:50%;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px}
+.member-card.selected .mc-check{background:var(--gold);border-color:var(--gold);color:#080a10}
+
+/* RESULT CARD */
+.result-card{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:10px}
+.result-hd{display:flex;align-items:center;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.result-name{font-weight:700;font-size:15px;color:var(--blue2)}
+.result-job-tag{font-size:10px}
+.result-val{margin-left:auto;font-size:11px;color:var(--dim2)}
+.result-val span{color:var(--gold);font-weight:700}
+.items-wrap{display:flex;flex-wrap:wrap;gap:6px}
+.item-chip{background:rgba(212,168,67,.08);border:1px solid rgba(212,168,67,.2);border-radius:6px;padding:4px 10px;font-size:11px}
+.item-chip.enhance{background:rgba(74,143,212,.08);border-color:rgba(74,143,212,.25)}
+.item-chip.equip{background:rgba(61,186,122,.08);border-color:rgba(61,186,122,.25)}
+.item-chip .p{color:var(--gold);font-size:10px;margin-left:4px}
+.item-chip .ph{font-size:9px;color:var(--dim);margin-left:2px}
+
+/* STEP INDICATOR */
+.step-bar{display:flex;gap:4px;margin-bottom:24px}
+.step-pip{flex:1;height:3px;border-radius:2px;background:var(--border);transition:background .3s}
+.step-pip.done{background:var(--green)}
+.step-pip.active{background:var(--gold)}
+
+/* MISC */
+.info{background:rgba(74,143,212,.08);border:1px solid rgba(74,143,212,.2);border-radius:6px;padding:9px 13px;font-size:11px;color:var(--blue2);margin-bottom:12px}
+.warn{background:rgba(212,168,67,.08);border:1px solid rgba(212,168,67,.2);border-radius:6px;padding:9px 13px;font-size:11px;color:var(--gold2);margin-bottom:12px}
+.empty{text-align:center;color:var(--dim);padding:24px;font-size:12px}
+.divider{height:1px;background:var(--border);margin:16px 0}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+@media(max-width:700px){.two-col,.three-col{grid-template-columns:1fr}.sidebar{width:180px;min-width:180px}}
+.stat-box{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center}
+.stat-val{font-family:'Cinzel',serif;font-size:24px;color:var(--gold)}
+.stat-key{font-size:10px;color:var(--dim2);margin-top:2px}
+.mono{font-family:monospace;font-size:12px;white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;max-height:300px;overflow-y:auto;line-height:1.9;color:var(--dim2)}
+
+/* LOTTERY */
+.lottery-wrap{text-align:center;padding:20px 0}
+.btn-lottery{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#080a10;font-family:'Cinzel',serif;font-size:15px;font-weight:900;letter-spacing:2px;padding:14px 44px;border-radius:8px;border:none;cursor:pointer;transition:all .2s;box-shadow:0 4px 24px rgba(212,168,67,.25)}
+.btn-lottery:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(212,168,67,.4)}
+.btn-lottery:disabled{opacity:.4;cursor:not-allowed;transform:none}
+@keyframes pop{0%{transform:scale(.95);opacity:.6}100%{transform:scale(1);opacity:1}}
+.pop{animation:pop .3s ease}
+
+/* MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:center;justify-content:center}
+.modal{background:var(--s1);border:1px solid var(--border2);border-radius:12px;padding:24px;width:420px;max-width:95vw;max-height:90vh;overflow-y:auto}
+.modal-title{font-family:'Cinzel',serif;font-size:14px;color:var(--gold);margin-bottom:16px;letter-spacing:1px}
+.hidden{display:none!important}
+
+/* SAVE indicator */
+.save-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-left:6px;vertical-align:middle}
+
+/* progress bar for group balance */
+.balance-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:4px}
+.balance-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--gold));transition:width .3s}
+
+/* scrollbar */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="logo">
+    <h1>⚔ YMIR</h1>
+    <p>CLAN DISTRIBUTOR v2</p>
+  </div>
+  <nav class="nav">
+    <div class="nav-label">マスタ</div>
+    <div class="nav-item" id="nav-master" onclick="showPage('master')">
+      <span class="n-icon">🗂</span>メンバー管理
+      <span class="n-badge" id="badge-member">0</span>
+    </div>
+    <div class="nav-sep"></div>
+    <div class="nav-label">分配作業</div>
+    <div class="nav-item active" id="nav-step1" onclick="showPage('step1')">
+      <span class="n-icon">📋</span>1. アイテム入力
+    </div>
+    <div class="nav-item" id="nav-step2" onclick="showPage('step2')">
+      <span class="n-icon">💎</span>2. 価格・タグ設定
+    </div>
+    <div class="nav-item" id="nav-step3" onclick="showPage('step3')">
+      <span class="n-icon">🎯</span>3. 振り分け選択
+    </div>
+    <div class="nav-item" id="nav-step4" onclick="showPage('step4')">
+      <span class="n-icon">🎲</span>4. グループ抽選
+    </div>
+    <div class="nav-item" id="nav-step5" onclick="showPage('step5')">
+      <span class="n-icon">⚔️</span>5. 強化書・高価格
+    </div>
+    <div class="nav-item" id="nav-step6" onclick="showPage('step6')">
+      <span class="n-icon">📊</span>6. 最終結果
+    </div>
+    <div class="nav-sep"></div>
+    <div class="nav-label">履歴</div>
+    <div class="nav-item" id="nav-logs" onclick="showPage('logs')">
+      <span class="n-icon">📜</span>ログ一覧
+      <span class="n-badge" id="badge-logs">0</span>
+    </div>
+  </nav>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+<!-- ══════════════════════════════════════════
+     MASTER: メンバー管理
+══════════════════════════════════════════ -->
+<div id="page-master" class="hidden">
+  <div class="page-title"><span class="t-icon">🗂</span>メンバー &amp; 職業マスタ</div>
+
+  <div class="two-col">
+    <!-- 職業 -->
+    <div class="panel">
+      <div class="panel-hd">⚔️ 職業リスト</div>
+      <div class="chip-list" id="job-chips"></div>
+      <div class="row" style="margin-top:10px">
+        <div class="field"><input type="text" id="job-input" placeholder="職業名" onkeydown="if(event.key==='Enter')addJob()"></div>
+        <button class="btn btn-gold btn-sm" onclick="addJob()">追加</button>
+      </div>
+    </div>
+
+    <!-- メンバー追加 -->
+    <div class="panel">
+      <div class="panel-hd">➕ メンバー追加</div>
+      <div class="field"><label>プレイヤー名</label><input type="text" id="member-name" placeholder="名前を入力"></div>
+      <div class="field"><label>職業</label>
+        <select id="member-job"><option value="">（職業なし）</option></select>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-gold" onclick="addMember()">メンバーを追加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- メンバー一覧 -->
+  <div class="panel">
+    <div class="panel-hd">👥 メンバー一覧 <span id="member-count" style="color:var(--dim2);font-size:11px;font-family:var(--font)"></span></div>
+    <div class="tbl-wrap">
+      <table class="tbl" id="member-table">
+        <thead><tr><th>プレイヤー名</th><th>職業</th><th></th></tr></thead>
+        <tbody id="member-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     STEP 1: アイテム入力 + 参加者選択
+══════════════════════════════════════════ -->
+<div id="page-step1">
+  <div class="step-bar">
+    <div class="step-pip active" id="pip1"></div>
+    <div class="step-pip" id="pip2"></div>
+    <div class="step-pip" id="pip3"></div>
+    <div class="step-pip" id="pip4"></div>
+    <div class="step-pip" id="pip5"></div>
+    <div class="step-pip" id="pip6"></div>
+  </div>
+  <div class="page-title"><span class="t-icon">📋</span>アイテム入力</div>
+
+  <div class="panel">
+    <div class="panel-hd">📋 アイテムリスト貼り付け</div>
+    <label>ゲームからコピーしたテキストをそのまま貼り付けてください</label>
+    <textarea id="item-input" placeholder="音の出ない鈴	1	輝く庭園島	2026.03.05 20:19:25 (UTC+8)&#10;強化書：アルペジオ	1	ラグナロクの谷 - ログバルトの箱	2026.03.04 21:27:51 (UTC+8)&#10;太陽石	29	ラグナロクの谷 - ログバルトの箱	2026.03.04 21:27:51 (UTC+8)"></textarea>
+    <div class="btn-row">
+      <button class="btn btn-gold" onclick="parseItems()">📥 読み込む</button>
+      <button class="btn btn-ghost" onclick="loadSample()">サンプルを使う</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hd">👥 参加者を選択（マスタから）</div>
+    <div class="info">クリックで選択・解除できます。マスタ未登録の場合は「メンバー管理」から先に登録してください。</div>
+    <div class="member-grid" id="participant-grid"></div>
+    <div id="no-members" class="empty hidden">メンバーが登録されていません。左メニューの「メンバー管理」から追加してください。</div>
+    <div style="margin-top:10px;font-size:11px;color:var(--dim2)">選択中: <span id="participant-count" style="color:var(--gold);font-weight:700">0</span> 名</div>
+  </div>
+
+  <div class="btn-row" style="justify-content:flex-end">
+    <button class="btn btn-gold" onclick="goStep(2)">次へ：価格・タグ設定 →</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     STEP 2: 価格 + タグ
+══════════════════════════════════════════ -->
+<div id="page-step2" class="hidden">
+  <div class="step-bar">
+    <div class="step-pip done" id="p2-1"></div>
+    <div class="step-pip active" id="p2-2"></div>
+    <div class="step-pip" id="p2-3"></div>
+    <div class="step-pip" id="p2-4"></div>
+    <div class="step-pip" id="p2-5"></div>
+    <div class="step-pip" id="p2-6"></div>
+  </div>
+  <div class="page-title"><span class="t-icon">💎</span>価格・タグ設定</div>
+  <div class="info">💾 価格は自動保存されます。同名アイテムが再度読み込まれた際に自動反映されます。<span class="save-dot"></span></div>
+  <div class="warn">⚠ 強化書・装備アイテムはグループ振り分けの対象外になります。タグを正しく設定してください。</div>
+
+  <div class="panel">
+    <div class="panel-hd">アイテム一覧（価格・タグ設定）</div>
+    <div class="tbl-wrap">
+      <table class="tbl" id="price-table">
+        <thead>
+          <tr>
+            <th>アイテム名</th>
+            <th>数量</th>
+            <th>単価 (◇)</th>
+            <th>合計 (◇)</th>
+            <th>強化書</th>
+            <th>装備</th>
+            <th>装備ステータス</th>
+          </tr>
+        </thead>
+        <tbody id="price-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="btn-row" style="justify-content:space-between">
+    <button class="btn btn-ghost" onclick="goStep(1)">← 戻る</button>
+    <button class="btn btn-gold" onclick="goStep(3)">次へ：振り分け選択 →</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     STEP 3: 振り分け選択（チェックボックス）
+══════════════════════════════════════════ -->
+<div id="page-step3" class="hidden">
+  <div class="step-bar">
+    <div class="step-pip done"></div><div class="step-pip done"></div>
+    <div class="step-pip active"></div><div class="step-pip"></div>
+    <div class="step-pip"></div><div class="step-pip"></div>
+  </div>
+  <div class="page-title"><span class="t-icon">🎯</span>グループ振り分け対象を選択</div>
+  <div class="info">強化書・装備アイテムは除外済みです。チェックしたアイテムを参加者数のグループに均等分配します。数量2以上は自動で1個ずつに分解されます。</div>
+
+  <div class="panel">
+    <div class="panel-hd">
+      対象アイテム選択
+      <span style="margin-left:auto;font-size:11px;font-family:var(--font)">
+        <input type="checkbox" id="sel-all" style="width:14px;height:14px;accent-color:var(--gold)" onchange="toggleSelAll(this)"> 全選択
+      </span>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" id="sel-table">
+        <thead><tr><th style="width:36px">選択</th><th>アイテム名</th><th>数量</th><th>単価</th><th>合計</th></tr></thead>
+        <tbody id="sel-tbody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--dim2)">選択: <span id="sel-count" style="color:var(--gold);font-weight:700">0</span> 種類</div>
+  </div>
+
+  <div class="btn-row" style="justify-content:space-between">
+    <button class="btn btn-ghost" onclick="goStep(2)">← 戻る</button>
+    <button class="btn btn-gold" onclick="buildGroups()">グループを自動作成 →</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     STEP 4: グループ抽選
+══════════════════════════════════════════ -->
+<div id="page-step4" class="hidden">
+  <div class="step-bar">
+    <div class="step-pip done"></div><div class="step-pip done"></div>
+    <div class="step-pip done"></div><div class="step-pip active"></div>
+    <div class="step-pip"></div><div class="step-pip"></div>
+  </div>
+  <div class="page-title"><span class="t-icon">🎲</span>グループ抽選</div>
+
+  <div class="panel">
+    <div class="panel-hd">グループ内容</div>
+    <div class="three-col" id="group-stat-row" style="margin-bottom:16px"></div>
+    <div id="group-preview"></div>
+  </div>
+
+  <div class="lottery-wrap">
+    <button class="btn-lottery" id="btn-group-lottery" onclick="runGroupLottery()">🎰 グループ抽選を実行！</button>
+  </div>
+  <div id="group-result" class="hidden"></div>
+
+  <div class="btn-row" style="justify-content:space-between;margin-top:16px">
+    <button class="btn btn-ghost" onclick="goStep(3)">← 戻る</button>
+    <button class="btn btn-gold" id="btn-to5" onclick="goStep(5)" disabled>次へ：強化書・高価格抽選 →</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     STEP 5: 強化書抽選 + 残り全員抽選
+══════════════════════════════════════════ -->
+<div id="page-step5" class="hidden">
+  <div class="step-bar">
+    <div class="step-pip done"></div><div class="step-pip done"></div>
+    <div class="step-pip done"></div><div class="step-pip done"></div>
+    <div class="step-pip active"></div><div class="step-pip"></div>
+  </div>
+  <div class="page-title"><span class="t-icon">⚔️</span>強化書 &amp; 高価格アイテム抽選</div>
+
+  <!-- 強化書 職業別 -->
+  <div class="panel" id="enhance-panel">
+    <div class="panel-hd">📖 強化書 — 職業別抽選</div>
+    <div class="info">各強化書に対象職業を設定してください。設定なし（全員）の強化書は、職業別抽選に漏れた人・対象外だった人で抽選します。</div>
+    <div id="enhance-job-list"></div>
+    <div class="btn-row">
+      <button class="btn btn-gold" onclick="runEnhanceLottery()">⚔️ 強化書抽選を実行</button>
+    </div>
+    <div id="enhance-result" class="hidden" style="margin-top:14px"></div>
+  </div>
+
+  <!-- 装備アイテム -->
+  <div class="panel" id="equip-panel">
+    <div class="panel-hd">🛡 装備アイテム — 職業別抽選</div>
+    <div id="equip-job-list"></div>
+    <div class="btn-row">
+      <button class="btn btn-gold" onclick="runEquipLottery()">🛡 装備アイテム抽選を実行</button>
+    </div>
+    <div id="equip-result" class="hidden" style="margin-top:14px"></div>
+  </div>
+
+  <!-- 残り高価格 -->
+  <div class="panel">
+    <div class="panel-hd">👑 残りアイテム — 全員抽選</div>
+    <div class="info">グループ振り分け・強化書・装備抽選の残りを全参加者で抽選します。</div>
+    <div id="remaining-list"></div>
+    <div class="lottery-wrap">
+      <button class="btn-lottery" onclick="runFinalLottery()">🎰 全員抽選を実行！</button>
+    </div>
+    <div id="final-result" class="hidden" style="margin-top:14px"></div>
+  </div>
+
+  <div class="btn-row" style="justify-content:space-between">
+    <button class="btn btn-ghost" onclick="goStep(4)">← 戻る</button>
+    <button class="btn btn-green" onclick="goStep(6)">📊 最終結果を表示 →</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     STEP 6: 最終結果
+══════════════════════════════════════════ -->
+<div id="page-step6" class="hidden">
+  <div class="step-bar">
+    <div class="step-pip done"></div><div class="step-pip done"></div>
+    <div class="step-pip done"></div><div class="step-pip done"></div>
+    <div class="step-pip done"></div><div class="step-pip active"></div>
+  </div>
+  <div class="page-title"><span class="t-icon">📊</span>最終分配結果</div>
+
+  <div class="panel">
+    <div class="panel-hd">分配サマリー</div>
+    <div class="three-col" id="summary-stats"></div>
+  </div>
+
+  <div id="final-cards"></div>
+
+  <div class="panel" style="margin-top:16px">
+    <div class="panel-hd">📝 テキスト出力</div>
+    <div class="mono" id="text-output"></div>
+    <div class="btn-row">
+      <button class="btn btn-gold" onclick="copyText()">📋 コピー</button>
+      <span id="copy-fb" style="color:var(--green);font-size:11px;opacity:0;transition:opacity .3s;margin-left:6px">✓ コピーしました</span>
+      <button class="btn btn-ghost" style="margin-left:auto" onclick="resetAll()">🔄 最初からやり直す</button>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px">
+    <div class="panel-hd">💾 ログを保存</div>
+    <div class="row" style="align-items:flex-end;gap:10px">
+      <div class="field" style="flex:1;margin:0">
+        <label>タイトル（空欄で自動: 日付+連番）</label>
+        <input type="text" id="log-title-input" placeholder="例: 第12回クラン分配">
+      </div>
+      <button class="btn btn-green" onclick="saveLog()">💾 保存する</button>
+    </div>
+    <div id="save-log-fb" style="color:var(--green);font-size:11px;margin-top:8px;opacity:0;transition:opacity .3s">✓ 保存しました</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     LOGS: ログ一覧
+══════════════════════════════════════════ -->
+<div id="page-logs" class="hidden">
+  <div class="page-title"><span class="t-icon">📜</span>ログ一覧</div>
+  <div class="panel">
+    <div class="panel-hd" style="justify-content:space-between">
+      保存済みログ
+      <button class="btn btn-danger btn-sm" onclick="clearAllLogs()">🗑 全削除</button>
+    </div>
+    <div id="log-list"></div>
+  </div>
+</div>
+
+<!-- LOG DETAIL MODAL -->
+<div class="modal-bg hidden" id="log-modal">
+  <div class="modal" style="width:600px;max-height:80vh">
+    <div class="modal-title" id="log-modal-title"></div>
+    <div class="mono" id="log-modal-body" style="max-height:55vh;font-size:11px"></div>
+    <div class="btn-row" style="justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-gold btn-sm" onclick="copyLogModal()">📋 コピー</button>
+      <span id="log-copy-fb" style="color:var(--green);font-size:11px;opacity:0;transition:opacity .3s;margin-left:6px">✓</span>
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="closeLogModal()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /layout -->
+
+<!-- EDIT MEMBER MODAL -->
+<div class="modal-bg hidden" id="edit-modal">
+  <div class="modal">
+    <div class="modal-title">メンバーを編集</div>
+    <div class="field"><label>プレイヤー名</label><input type="text" id="edit-name"></div>
+    <div class="field"><label>職業</label><select id="edit-job"><option value="">（職業なし）</option></select></div>
+    <div class="btn-row" style="justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-gold" onclick="saveEditMember()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// STORAGE helpers (Supabase)
+// ═══════════════════════════════════════════════
+const SB_URL = 'https://runljwkewxjtdyehguja.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1bmxqd2tld3hqdGR5ZWhndWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MDg0MjEsImV4cCI6MjA4ODM4NDQyMX0.60HKsHh0JGb6s_QO0Ma0L-ZJerfzgMSfySyW6X6HI8A';
+const SB_HDR = { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Prefer': 'resolution=merge-duplicates' };
+
+async function storeSet(key, val) {
+  try {
+    await fetch(`${SB_URL}/rest/v1/ymir_store`, {
+      method: 'POST',
+      headers: SB_HDR,
+      body: JSON.stringify({ key, value: JSON.stringify(val) })
+    });
+  } catch(e) { console.error('storeSet error', e); }
+}
+
+async function storeGet(key, def) {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/ymir_store?key=eq.${encodeURIComponent(key)}&select=value`, { headers: SB_HDR });
+    const data = await r.json();
+    return data.length ? JSON.parse(data[0].value) : def;
+  } catch(e) { return def; }
+}
+
+async function storeDel(key) {
+  try {
+    await fetch(`${SB_URL}/rest/v1/ymir_store?key=eq.${encodeURIComponent(key)}`, { method: 'DELETE', headers: SB_HDR });
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+const S = {
+  // Master
+  members: [],   // {id, name, job}
+  jobs: [],      // string[]
+
+  // Session
+  rawItems: [],       // {name, qty, location, date}
+  mergedItems: [],    // {name, qty, price, enhanceTag:'', isEquip:false, equipStatus:''}
+  participants: [],   // member ids selected
+  selectedNames: new Set(), // item names for group
+  groups: [],         // [{items:[{name,price}], value}]
+
+  // Results
+  groupAssign: {},    // name -> [{name,price,phase}]
+  enhanceAssign: {},
+  equipAssign: {},
+  finalAssign: {},
+  enhanceOrder: null, // ordering for enhance lottery
+
+  // Price cache: itemName -> {price, enhanceTag, isEquip, equipStatus}
+  priceCache: {},
+  // Enhance job map: origIdx -> jobName (persisted per session via item name key)
+  enhanceJobMap: {},  // itemName+unitIndex -> job
+
+  editingMemberId: null,
+};
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+async function init() {
+  S.members = await storeGet('ymir_members', []);
+  S.jobs    = await storeGet('ymir_jobs', []);
+  S.priceCache = await storeGet('ymir_prices', {});
+  S.enhanceJobMap = await storeGet('ymir_enhance_jobs', {});
+  renderMaster();
+  renderParticipantGrid();
+  updateBadge();
+  updateLogBadge();
+}
+init();
+
+// ═══════════════════════════════════════════════
+// PAGE NAV
+// ═══════════════════════════════════════════════
+function showPage(id) {
+  ['master','step1','step2','step3','step4','step5','step6','logs'].forEach(p => {
+    document.getElementById('page-'+p).classList.add('hidden');
+    document.getElementById('nav-'+p)?.classList.remove('active');
+  });
+  document.getElementById('page-'+id).classList.remove('hidden');
+  document.getElementById('nav-'+id)?.classList.add('active');
+  if (id === 'logs') renderLogList();
+}
+function goStep(n) {
+  if (n===2) renderPriceTable();
+  if (n===3) renderSelTable();
+  if (n===4) renderGroupPreview();
+  if (n===5) renderStep5();
+  if (n===6) renderFinalResult();
+  showPage('step'+n);
+}
+
+// ═══════════════════════════════════════════════
+// MASTER: JOBS
+// ═══════════════════════════════════════════════
+function addJob() {
+  const v = document.getElementById('job-input').value.trim();
+  if (!v || S.jobs.includes(v)) { document.getElementById('job-input').value=''; return; }
+  S.jobs.push(v);
+  document.getElementById('job-input').value = '';
+  saveMaster();
+  renderMaster();
+}
+function removeJob(j) {
+  S.jobs = S.jobs.filter(x=>x!==j);
+  // Remove from members
+  S.members.forEach(m => { if(m.job===j) m.job=''; });
+  saveMaster();
+  renderMaster();
+}
+
+// ═══════════════════════════════════════════════
+// MASTER: MEMBERS
+// ═══════════════════════════════════════════════
+function addMember() {
+  const name = document.getElementById('member-name').value.trim();
+  if (!name) return;
+  const job  = document.getElementById('member-job').value;
+  S.members.push({ id: Date.now().toString(), name, job });
+  document.getElementById('member-name').value = '';
+  saveMaster();
+  renderMaster();
+  renderParticipantGrid();
+  updateBadge();
+}
+function removeMember(id) {
+  S.members = S.members.filter(m=>m.id!==id);
+  saveMaster();
+  renderMaster();
+  renderParticipantGrid();
+  updateBadge();
+}
+function openEditMember(id) {
+  S.editingMemberId = id;
+  const m = S.members.find(x=>x.id===id);
+  document.getElementById('edit-name').value = m.name;
+  populateJobSelect('edit-job', m.job);
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+function saveEditMember() {
+  const m = S.members.find(x=>x.id===S.editingMemberId);
+  m.name = document.getElementById('edit-name').value.trim() || m.name;
+  m.job  = document.getElementById('edit-job').value;
+  saveMaster();
+  renderMaster();
+  renderParticipantGrid();
+  closeModal();
+}
+function closeModal() { document.getElementById('edit-modal').classList.add('hidden'); }
+
+async function saveMaster() {
+  await storeSet('ymir_members', S.members);
+  await storeSet('ymir_jobs', S.jobs);
+}
+
+function renderMaster() {
+  // job chips
+  const jc = document.getElementById('job-chips');
+  jc.innerHTML = S.jobs.map(j =>
+    `<div class="chip chip-job">${j}<button onclick="removeJob('${esc(j)}')">✕</button></div>`
+  ).join('') || '<span style="color:var(--dim);font-size:11px">職業が登録されていません</span>';
+
+  // member job selects
+  populateJobSelect('member-job', '');
+  populateJobSelect('edit-job', '');
+
+  // member table
+  document.getElementById('member-count').textContent = `(${S.members.length}名)`;
+  document.getElementById('member-tbody').innerHTML = S.members.length ? S.members.map(m => `
+    <tr>
+      <td><strong>${m.name}</strong></td>
+      <td>${m.job ? `<span class="tag tag-job">${m.job}</span>` : '<span style="color:var(--dim)">―</span>'}</td>
+      <td style="text-align:right">
+        <button class="btn btn-ghost btn-xs" onclick="openEditMember('${m.id}')">編集</button>
+        <button class="btn btn-danger btn-xs" style="margin-left:4px" onclick="removeMember('${m.id}')">削除</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="3" class="empty">メンバーがいません</td></tr>';
+
+  updateBadge();
+}
+
+function populateJobSelect(id, current) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = `<option value="">（職業なし）</option>` +
+    S.jobs.map(j=>`<option value="${esc(j)}" ${j===current?'selected':''}>${j}</option>`).join('');
+}
+
+function updateBadge() {
+  document.getElementById('badge-member').textContent = S.members.length;
+}
+
+// ═══════════════════════════════════════════════
+// STEP 1: PARTICIPANT GRID
+// ═══════════════════════════════════════════════
+function renderParticipantGrid() {
+  const grid = document.getElementById('participant-grid');
+  const noMem = document.getElementById('no-members');
+  if (!S.members.length) {
+    grid.innerHTML = '';
+    noMem.classList.remove('hidden');
+    document.getElementById('participant-count').textContent = '0';
+    return;
+  }
+  noMem.classList.add('hidden');
+  grid.innerHTML = S.members.map(m => {
+    const sel = S.participants.includes(m.id);
+    return `<div class="member-card ${sel?'selected':''}" onclick="toggleParticipant('${m.id}')">
+      <div class="mc-name">${m.name}</div>
+      <div class="mc-job">${m.job ? `<span class="tag tag-job" style="font-size:9px">${m.job}</span>` : '職業なし'}</div>
+      <div class="mc-check">${sel?'✓':''}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('participant-count').textContent = S.participants.length;
+}
+
+function toggleParticipant(id) {
+  if (S.participants.includes(id)) S.participants = S.participants.filter(x=>x!==id);
+  else S.participants.push(id);
+  renderParticipantGrid();
+}
+
+// ═══════════════════════════════════════════════
+// STEP 1: PARSE ITEMS
+// ═══════════════════════════════════════════════
+function loadSample() {
+  document.getElementById('item-input').value =
+`音の出ない鈴\t1\t輝く庭園島\t2026.03.05 20:19:25 (UTC+8)
+高級青いパトラカード\t1\t輝く庭園島\t2026.03.05 20:19:25 (UTC+8)
+高級魂\t1\t輝く庭園島\t2026.03.05 20:19:25 (UTC+8)
+太陽石\t1\t輝く庭園島\t2026.03.05 20:19:25 (UTC+8)
+上級宝石\t1\t輝く庭園島\t2026.03.05 20:19:25 (UTC+8)
+強化書：ウィンターアイシクル\t1\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+強化書：アルペジオ\t1\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+太陽石\t29\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+アンバーの袋\t10\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+希少魂\t1\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+下級ホルン\t1\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+幸運のトーテム\t12\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+銀貨箱\t5\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+生活装備強化石\t1\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+中級精神の熟練書\t2\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+ブロックの武器設計図\t1\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+スチールチェーン\t1\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+黄昏の結晶\t3\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+ブロックの生活装備設計図\t1\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)
+中級部品\t2\tラグナロクの谷 - ログバルトの箱\t2026.03.04 21:27:51 (UTC+8)`;
+  parseItems();
+}
+
+function parseItems() {
+  const text = document.getElementById('item-input').value.trim();
+  if (!text) { alert('アイテムリストを入力してください'); return; }
+
+  // First pass: collect qty per name
+  const map = {};
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    const parts = line.split('\t');
+    if (parts.length < 2) continue;
+    const name = parts[0].trim(), qty = parseInt(parts[1])||1;
+    map[name] = (map[name]||0) + qty;
+  }
+
+  // Build mergedItems — expand items that were previously cached as enhance into individual rows
+  S.mergedItems = [];
+  let totalQty = 0;
+  for (const [name, qty] of Object.entries(map)) {
+    totalQty += qty;
+    const cached = S.priceCache[name] || {};
+    const wasEnhance = !!(cached.enhanceTag);
+
+    if (wasEnhance) {
+      // Expand each unit as separate item entry
+      for (let u = 0; u < qty; u++) {
+        const unitCache = (cached.units || [])[u] || {};
+        S.mergedItems.push({
+          name,
+          qty: 1,
+          unitIndex: u,   // which unit this is (for display)
+          totalQty: qty,  // total qty of this name (for display "#1 of N")
+          price: cached.price ?? 0,
+          enhanceTag: unitCache.enhanceTag ?? cached.enhanceTag ?? '',
+          isEquip: false,
+          equipStatus: '',
+          unitStatus: unitCache.unitStatus ?? '',
+          _expandedUnit: true,
+        });
+      }
+    } else {
+      S.mergedItems.push({
+        name, qty,
+        unitIndex: 0, totalQty: qty,
+        price: cached.price ?? 0,
+        enhanceTag: '',
+        isEquip: cached.isEquip ?? false,
+        equipStatus: cached.equipStatus ?? '',
+        unitStatus: '',
+        _expandedUnit: false,
+      });
+    }
+  }
+
+  alert(`✓ ${Object.keys(map).length} 種類 / 合計 ${totalQty} 個 を読み込みました`);
+}
+
+// ═══════════════════════════════════════════════
+// STEP 2: PRICE + TAG TABLE
+// ═══════════════════════════════════════════════
+// mergedItems stores base data. For enhance items, we keep per-unit status in item.unitStatuses[i]
+// ═══════════════════════════════════════════════
+// STEP 2: PRICE + TAG TABLE
+// Each S.mergedItems[i] is one display row. No re-render on tag change.
+// ═══════════════════════════════════════════════
+function renderPriceTable() {
+  if (!S.mergedItems.length) {
+    document.getElementById('price-tbody').innerHTML = '<tr><td colspan="7" class="empty">アイテムが読み込まれていません</td></tr>';
+    return;
+  }
+  let rows = '';
+  S.mergedItems.forEach((item, i) => {
+    const showNum = item.totalQty > 1;
+    const nameLabel = showNum
+      ? `<strong>${item.name}</strong> <span style="color:var(--dim);font-size:10px">#${item.unitIndex+1}</span>`
+      : `<strong>${item.name}</strong>`;
+    const statusDisabled = (!item.isEquip && !item.enhanceTag);
+    rows += `<tr id="pr-row-${i}">
+      <td>${nameLabel}</td>
+      <td style="color:var(--blue2)">${item.qty}</td>
+      <td><input type="number" min="0" step="any" value="${item.price}" style="width:90px"
+        oninput="updateItemPrice(${i},this.value)"></td>
+      <td id="pr-total-${i}" style="color:var(--gold)">${fmt(item.price*item.qty)} ◇</td>
+      <td><select style="width:90px" onchange="updateItemEnhance(${i},this.value)">
+        <option value="">―</option>
+        <option value="一般" ${item.enhanceTag==='一般'?'selected':''}>一般</option>
+        <option value="高級" ${item.enhanceTag==='高級'?'selected':''}>高級</option>
+        <option value="上級" ${item.enhanceTag==='上級'?'selected':''}>上級</option>
+      </select></td>
+      <td style="text-align:center"><input type="checkbox" ${item.isEquip?'checked':''}
+        onchange="updateItemEquip(${i},this.checked)"></td>
+      <td><input type="text"
+        placeholder="${item.isEquip?'装備ステータス':item.enhanceTag?'ステータス':'―'}"
+        value="${item.unitStatus||item.equipStatus||''}"
+        style="width:180px${statusDisabled?';opacity:.3':''}"
+        ${statusDisabled?'disabled':''}
+        id="stat-${i}"
+        oninput="updateItemStatus(${i},this.value)"></td>
+    </tr>`;
+  });
+  document.getElementById('price-tbody').innerHTML = rows;
+}
+
+async function _saveItemCache(i) {
+  const item = S.mergedItems[i];
+  const sameRows = S.mergedItems.filter(it => it.name === item.name);
+  const units = sameRows.map(it => ({ enhanceTag: it.enhanceTag, unitStatus: it.unitStatus }));
+  S.priceCache[item.name] = {
+    price: item.price,
+    enhanceTag: sameRows[0]?.enhanceTag || '',
+    isEquip: item.isEquip,
+    equipStatus: item.equipStatus,
+    units,
+  };
+  await storeSet('ymir_prices', S.priceCache);
+}
+
+function updateItemPrice(i, val) {
+  const v = val === '' ? 0 : parseFloat(val);
+  if (isNaN(v)) return;
+  const name = S.mergedItems[i].name;
+  S.mergedItems.forEach((it, idx) => {
+    if (it.name === name) {
+      it.price = v;
+      const totEl = document.getElementById('pr-total-'+idx);
+      if (totEl) totEl.textContent = fmt(v * it.qty) + ' ◇';
+    }
+  });
+  _saveItemCache(i);
+}
+
+function updateItemEnhance(i, val) {
+  S.mergedItems[i].enhanceTag = val;
+  const statEl = document.getElementById('stat-'+i);
+  if (statEl) {
+    const dis = (!S.mergedItems[i].isEquip && !val);
+    statEl.disabled = dis;
+    statEl.style.opacity = dis ? '.3' : '1';
+    statEl.placeholder = val ? 'ステータス' : S.mergedItems[i].isEquip ? '装備ステータス' : '―';
+  }
+  _saveItemCache(i);
+}
+
+function updateItemEquip(i, checked) {
+  S.mergedItems[i].isEquip = checked;
+  const statEl = document.getElementById('stat-'+i);
+  if (statEl) {
+    const dis = (!checked && !S.mergedItems[i].enhanceTag);
+    statEl.disabled = dis;
+    statEl.style.opacity = dis ? '.3' : '1';
+    statEl.placeholder = checked ? '装備ステータス' : S.mergedItems[i].enhanceTag ? 'ステータス' : '―';
+  }
+  _saveItemCache(i);
+}
+
+function updateItemStatus(i, val) {
+  if (S.mergedItems[i].isEquip) S.mergedItems[i].equipStatus = val;
+  else S.mergedItems[i].unitStatus = val;
+  _saveItemCache(i);
+}
+
+// ═══════════════════════════════════════════════
+// STEP 3: SELECT TABLE
+// ═══════════════════════════════════════════════
+function renderSelTable() {
+  // Only non-enhance, non-equip items. Group by name for display.
+  const eligible = S.mergedItems.filter(it => !it.enhanceTag && !it.isEquip);
+  // Deduplicate by name (they all have qty=original for non-expanded items)
+  const seen = new Set();
+  const deduped = eligible.filter(it => { if(seen.has(it.name)) return false; seen.add(it.name); return true; });
+  const sorted = [...deduped].sort((a,b)=>(a.price*a.qty)-(b.price*b.qty));
+  document.getElementById('sel-tbody').innerHTML = sorted.length ? sorted.map(item => `
+    <tr>
+      <td><input type="checkbox" ${S.selectedNames.has(item.name)?'checked':''}
+        onchange="toggleSel('${esc(item.name)}',this.checked)"></td>
+      <td>${item.name}</td>
+      <td style="color:var(--blue2)">${item.qty}</td>
+      <td>${fmt(item.price)} ◇</td>
+      <td style="color:var(--gold)">${fmt(item.price*item.qty)} ◇</td>
+    </tr>`).join('') :
+    '<tr><td colspan="5" class="empty">対象アイテムがありません（強化書・装備は除外済み）</td></tr>';
+  updateSelCount();
+}
+function toggleSel(name, checked) {
+  if (checked) S.selectedNames.add(name); else S.selectedNames.delete(name);
+  updateSelCount();
+}
+function toggleSelAll(cb) {
+  S.selectedNames.clear();
+  if (cb.checked) {
+    S.mergedItems.filter(it=>!it.enhanceTag&&!it.isEquip).forEach(it=>S.selectedNames.add(it.name));
+  }
+  renderSelTable();
+}
+function updateSelCount() { document.getElementById('sel-count').textContent = S.selectedNames.size; }
+
+// ═══════════════════════════════════════════════
+// STEP 3 → 4: BUILD GROUPS
+// ═══════════════════════════════════════════════
+function buildGroups() {
+  if (!S.selectedNames.size) { alert('アイテムを選択してください'); return; }
+  const n = S.participants.length;
+  if (!n) { alert('参加者を選択してください（STEP1）'); return; }
+
+  // Expand
+  let pool = [];
+  for (const item of S.mergedItems) {
+    if (!S.selectedNames.has(item.name)) continue;
+    for (let q=0; q<item.qty; q++) pool.push({name:item.name, price:item.price});
+  }
+  pool.sort((a,b)=>b.price-a.price);
+
+  const groups = Array.from({length:n}, ()=>({items:[], value:0, nc:{}}));
+  for (const item of pool) {
+    let best=0;
+    for (let g=1;g<n;g++) {
+      if (groups[g].value < groups[best].value) { best=g; continue; }
+      if (groups[g].value === groups[best].value) {
+        if ((groups[g].nc[item.name]||0) < (groups[best].nc[item.name]||0)) best=g;
+      }
+    }
+    groups[best].items.push(item);
+    groups[best].value += item.price;
+    groups[best].nc[item.name] = (groups[best].nc[item.name]||0)+1;
+  }
+  S.groups = groups;
+  goStep(4);
+}
+
+// ═══════════════════════════════════════════════
+// STEP 4: GROUP PREVIEW + LOTTERY
+// ═══════════════════════════════════════════════
+function renderGroupPreview() {
+  const maxV = Math.max(...S.groups.map(g=>g.value), 1);
+  document.getElementById('group-stat-row').innerHTML = `
+    <div class="stat-box"><div class="stat-val">${S.groups.length}</div><div class="stat-key">グループ数</div></div>
+    <div class="stat-box"><div class="stat-val">${S.participants.length}</div><div class="stat-key">参加者数</div></div>
+    <div class="stat-box"><div class="stat-val">${S.groups.reduce((s,g)=>s+g.items.length,0)}</div><div class="stat-key">対象アイテム数</div></div>`;
+
+  document.getElementById('group-preview').innerHTML = S.groups.map((g,i)=>`
+    <div class="result-card" style="margin-bottom:8px">
+      <div class="result-hd">
+        <span class="result-name">グループ ${i+1}</span>
+        <div style="flex:1;margin:0 16px"><div class="balance-bar"><div class="balance-fill" style="width:${Math.round(g.value/maxV*100)}%"></div></div></div>
+        <span class="result-val">合計 <span>${fmt(g.value)} ◇</span></span>
+      </div>
+      <div class="items-wrap">
+        ${g.items.map(it=>`<div class="item-chip">${it.name}<span class="p">${fmt(it.price)} ◇</span></div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function runGroupLottery() {
+  if (!S.participants.length) { alert('参加者を選択してください'); return; }
+  S.groupAssign = {};
+  const ps = shuffle([...S.participants]);
+  const gs = shuffle([...S.groups]);
+  ps.forEach((id,i) => {
+    const m = memberById(id);
+    S.groupAssign[id] = (gs[i]?.items||[]).map(it=>({...it,phase:'グループ'}));
+  });
+
+  document.getElementById('group-result').classList.remove('hidden');
+  document.getElementById('group-result').innerHTML =
+    '<div style="font-size:11px;color:var(--dim2);letter-spacing:2px;margin-bottom:10px">🎉 抽選結果</div>' +
+    ps.map(id=>{
+      const m=memberById(id), items=S.groupAssign[id]||[];
+      return `<div class="result-card pop">
+        <div class="result-hd">
+          <span class="result-name">👤 ${m.name}</span>
+          ${m.job?`<span class="tag tag-job result-job-tag">${m.job}</span>`:''}
+          <span class="result-val">合計 <span>${fmt(items.reduce((s,i)=>s+i.price,0))} ◇</span></span>
+        </div>
+        <div class="items-wrap">
+          ${items.map(it=>`<div class="item-chip">${it.name}<span class="p">${fmt(it.price)} ◇</span></div>`).join('')||'<span style="color:var(--dim);font-size:11px">なし</span>'}
+        </div>
+      </div>`;
+    }).join('');
+  document.getElementById('btn-to5').disabled = false;
+}
+
+// ═══════════════════════════════════════════════
+// STEP 5: ENHANCE + EQUIP + FINAL LOTTERY
+// ═══════════════════════════════════════════════
+function renderStep5() {
+  const enhanceItems = S.mergedItems.filter(it=>it.enhanceTag);
+  const equipItems   = S.mergedItems.filter(it=>it.isEquip);
+  // otherItems: non-enhance, non-equip, not selected for group
+  const otherItems   = S.mergedItems.filter(it=>!it.enhanceTag&&!it.isEquip&&!S.selectedNames.has(it.name));
+
+  // Enhance order
+  if (!S.enhanceOrder || S.enhanceOrder.length !== enhanceItems.length) {
+    S.enhanceOrder = enhanceItems.map((_, i) => i);
+  }
+
+  // Enhance: build ordered list with job + priority UI
+  const enhEl = document.getElementById('enhance-job-list');
+  if (!enhanceItems.length) {
+    enhEl.innerHTML = '<div class="empty">強化書はありません</div>';
+    document.getElementById('enhance-panel').style.opacity='0.5';
+  } else {
+    document.getElementById('enhance-panel').style.opacity='1';
+    renderEnhanceOrderList(enhanceItems);
+  }
+
+  // Equip
+  const eqEl = document.getElementById('equip-job-list');
+  if (!equipItems.length) {
+    eqEl.innerHTML = '<div class="empty">装備アイテムはありません</div>';
+    document.getElementById('equip-panel').style.opacity='0.5';
+  } else {
+    document.getElementById('equip-panel').style.opacity='1';
+    eqEl.innerHTML = equipItems.map(item=>`
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 4px;border-bottom:1px solid var(--border)">
+        <span style="flex:1"><strong>${item.name}</strong> × ${item.qty}
+          <span class="tag tag-equip" style="margin-left:6px">装備</span>
+          ${item.equipStatus?`<span style="color:var(--dim2);font-size:10px;margin-left:6px">${item.equipStatus}</span>`:''}
+          <span style="color:var(--gold);font-size:11px;margin-left:6px">${fmt(item.price*item.qty)} ◇</span>
+        </span>
+        <select id="eq-job-${safeId(item.name)}" style="width:130px">
+          <option value="">全員で抽選</option>
+          ${S.jobs.map(j=>`<option value="${esc(j)}">${j}限定</option>`).join('')}
+        </select>
+      </div>`).join('');
+  }
+
+  // Remaining
+  const remEl = document.getElementById('remaining-list');
+  if (!otherItems.length) {
+    remEl.innerHTML = '<div class="empty">残りアイテムなし</div>';
+  } else {
+    remEl.innerHTML = '<div class="items-wrap" style="margin-bottom:12px">' +
+      otherItems.map(it=>`<div class="item-chip">${it.name} × ${it.qty}<span class="p">${fmt(it.price*it.qty)} ◇</span></div>`).join('') +
+      '</div>';
+  }
+}
+
+function renderEnhanceOrderList(enhanceItems) {
+  if (!S.enhanceOrder || S.enhanceOrder.length !== enhanceItems.length) {
+    S.enhanceOrder = enhanceItems.map((_,i)=>i);
+  }
+  const el = document.getElementById('enhance-job-list');
+  el.innerHTML = `
+    <div class="info" style="margin-bottom:10px">職業指定あり → 重みが大きい順（上級→高級→一般）で自動的に抽選されます。手動で順番を変えたい場合は▲▼で調整できます。</div>
+    <table class="tbl">
+      <thead><tr><th style="width:60px">抽選順</th><th>強化書名</th><th>種類</th><th>ステータス</th><th>職業限定</th><th style="width:80px">並び替え</th></tr></thead>
+      <tbody>
+        ${S.enhanceOrder.map((origIdx, orderPos) => {
+          const item = enhanceItems[origIdx];
+          if (!item) return '';
+          const numLabel = item.totalQty > 1 ? ` <span style="color:var(--dim);font-size:10px">#${item.unitIndex+1}</span>` : '';
+          return `<tr>
+            <td><input type="number" min="1" max="${enhanceItems.length}" value="${orderPos+1}" style="width:50px"
+              onchange="moveEnhanceToPos(${orderPos}, parseInt(this.value)-1, ${enhanceItems.length})"></td>
+            <td><strong>${item.name}</strong>${numLabel}</td>
+            <td><span class="tag tag-enhance${item.enhanceTag==='高級'?' tag-enhance-gold':item.enhanceTag==='上級'?' tag-enhance-up':''}">${item.enhanceTag}</span></td>
+            <td style="color:var(--dim2);font-size:11px">${item.unitStatus||'―'}</td>
+            <td><select id="enh-job-${origIdx}" style="width:120px"
+              onchange="saveEnhanceJob(${origIdx}, this.value)">
+              <option value="">全員で抽選</option>
+              ${S.jobs.map(j=>`<option value="${esc(j)}" ${(S.enhanceJobMap[origIdx]||'')=== j?'selected':''}>${j}限定</option>`).join('')}
+            </select></td>
+            <td>
+              <button class="btn btn-ghost btn-xs" onclick="shiftEnhance(${orderPos},-1,${enhanceItems.length})" ${orderPos===0?'disabled':''}>▲</button>
+              <button class="btn btn-ghost btn-xs" onclick="shiftEnhance(${orderPos},1,${enhanceItems.length})" ${orderPos===enhanceItems.length-1?'disabled':''}>▼</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+function shiftEnhance(pos, dir, len) {
+  const newPos = pos + dir;
+  if (newPos < 0 || newPos >= len) return;
+  const enhanceItems = S.mergedItems.filter(it=>it.enhanceTag);
+  _saveEnhanceJobSelections(enhanceItems);
+  [S.enhanceOrder[pos], S.enhanceOrder[newPos]] = [S.enhanceOrder[newPos], S.enhanceOrder[pos]];
+  renderEnhanceOrderList(enhanceItems);
+  _restoreEnhanceJobSelections(enhanceItems);
+}
+
+function moveEnhanceToPos(fromPos, toPos, len) {
+  toPos = Math.max(0, Math.min(len-1, toPos));
+  const enhanceItems = S.mergedItems.filter(it=>it.enhanceTag);
+  _saveEnhanceJobSelections(enhanceItems);
+  const item = S.enhanceOrder.splice(fromPos, 1)[0];
+  S.enhanceOrder.splice(toPos, 0, item);
+  renderEnhanceOrderList(enhanceItems);
+  _restoreEnhanceJobSelections(enhanceItems);
+}
+
+async function saveEnhanceJob(origIdx, val) {
+  S.enhanceJobMap[origIdx] = val;
+  await storeSet('ymir_enhance_jobs', S.enhanceJobMap);
+}
+
+const _enhJobSelCache = {};
+function _saveEnhanceJobSelections(enhanceItems) {
+  enhanceItems.forEach((item, origIdx) => {
+    const el = document.getElementById('enh-job-'+origIdx);
+    if (el) { _enhJobSelCache[origIdx] = el.value; S.enhanceJobMap[origIdx] = el.value; }
+  });
+  storeSet('ymir_enhance_jobs', S.enhanceJobMap);
+}
+function _restoreEnhanceJobSelections(enhanceItems) {
+  enhanceItems.forEach((item, origIdx) => {
+    const el = document.getElementById('enh-job-'+origIdx);
+    if (el) el.value = S.enhanceJobMap[origIdx] || '';
+  });
+}
+
+function runEnhanceLottery() {
+  const enhanceItems = S.mergedItems.filter(it=>it.enhanceTag);
+  if (!enhanceItems.length) return;
+  S.enhanceAssign = {};
+
+  const weightSum = {};
+  S.participants.forEach(id => weightSum[id] = 0);
+
+  // ── 抽選順を自動決定 ──────────────────────────────
+  // 1. 職業指定あり（重み降順）→ 2. 職業指定なし（重み降順）
+  const baseOrder = S.enhanceOrder || enhanceItems.map((_,i)=>i);
+  const withMeta = baseOrder.map(origIdx => {
+    const item = enhanceItems[origIdx];
+    if (!item) return null;
+    const jobSel = document.getElementById('enh-job-'+origIdx);
+    const job = jobSel ? jobSel.value : (S.enhanceJobMap[origIdx] || '');
+    const w = ENHANCE_RANK_WEIGHT[item.enhanceTag] || 1;
+    return { origIdx, item, job, w };
+  }).filter(Boolean);
+
+  // 職業あり・重み降順 → 職業なし・重み降順
+  withMeta.sort((a, b) => {
+    const aHasJob = a.job ? 1 : 0;
+    const bHasJob = b.job ? 1 : 0;
+    if (bHasJob !== aHasJob) return bHasJob - aHasJob; // 職業あり優先
+    return b.w - a.w;                                   // 重み降順
+  });
+
+  for (const { origIdx, item, job, w } of withMeta) {
+    let pool;
+    if (job) {
+      pool = S.participants.filter(id => memberById(id)?.job === job);
+      if (!pool.length) pool = [...S.participants];
+    } else {
+      pool = [...S.participants];
+    }
+
+    const winner = fairPickByWeight(pool, weightSum);
+    if (!winner) continue;
+    weightSum[winner] = (weightSum[winner] || 0) + w;
+    if (!S.enhanceAssign[winner]) S.enhanceAssign[winner] = [];
+    S.enhanceAssign[winner].push({
+      name: item.name, price: item.price,
+      enhanceTag: item.enhanceTag, unitStatus: item.unitStatus || '',
+      phase: '強化書'
+    });
+  }
+
+  document.getElementById('enhance-result').classList.remove('hidden');
+  document.getElementById('enhance-result').innerHTML =
+    '<div style="font-size:11px;color:var(--dim2);letter-spacing:1px;margin-bottom:8px">🎉 強化書抽選結果</div>' +
+    (Object.keys(S.enhanceAssign).length ? Object.entries(S.enhanceAssign).map(([id,items])=>{
+      const m=memberById(id);
+      return `<div class="result-card"><div class="result-hd"><span class="result-name">👤 ${m?.name||id}</span>${m?.job?`<span class="tag tag-job result-job-tag">${m.job}</span>`:''}</div>
+        <div class="items-wrap">${items.map(it=>`<div class="item-chip enhance">
+          ${it.name}
+          <span class="tag tag-enhance${it.enhanceTag==='高級'?' tag-enhance-gold':it.enhanceTag==='上級'?' tag-enhance-up':''}" style="margin-left:4px">${it.enhanceTag}</span>
+          ${it.unitStatus?`<span style="font-size:9px;color:var(--dim2);margin-left:4px">${it.unitStatus}</span>`:''}
+        </div>`).join('')}</div>
+      </div>`;
+    }).join('') : '<div class="empty">強化書がありません</div>');
+}
+
+function runEquipLottery() {
+  const equipItems = S.mergedItems.filter(it=>it.isEquip);
+  S.equipAssign = {};
+  const weightSum = {};
+  S.participants.forEach(id => weightSum[id] = 0);
+
+  for (const item of equipItems) {
+    const jobSel = document.getElementById('eq-job-'+safeId(item.name));
+    const job = jobSel ? jobSel.value : '';
+    for (let q=0;q<item.qty;q++) {
+      let pool = job
+        ? S.participants.filter(id=>memberById(id)?.job===job)
+        : S.participants;
+      if (!pool.length) pool = [...S.participants];
+      const winner = fairPickByWeight(pool, weightSum);
+      if (!winner) continue;
+      weightSum[winner] = (weightSum[winner] || 0) + 1;
+      if (!S.equipAssign[winner]) S.equipAssign[winner] = [];
+      S.equipAssign[winner].push({name:item.name, price:item.price, isEquip:true, equipStatus:item.equipStatus, phase:'装備'});
+    }
+  }
+  document.getElementById('equip-result').classList.remove('hidden');
+  document.getElementById('equip-result').innerHTML =
+    '<div style="font-size:11px;color:var(--dim2);margin-bottom:8px">🎉 装備抽選結果</div>' +
+    (Object.keys(S.equipAssign).length ? Object.entries(S.equipAssign).map(([id,items])=>{
+      const m=memberById(id);
+      return `<div class="result-card"><div class="result-hd"><span class="result-name">👤 ${m?.name||id}</span>${m?.job?`<span class="tag tag-job result-job-tag">${m.job}</span>`:''}</div>
+        <div class="items-wrap">${items.map(it=>`<div class="item-chip equip">${it.name}${it.equipStatus?` <span style="font-size:9px;color:var(--dim)">${it.equipStatus}</span>`:''}</div>`).join('')}</div>
+      </div>`;
+    }).join('') : '<div class="empty">装備アイテムがありません</div>');
+}
+
+function runFinalLottery() {
+  const otherItems = S.mergedItems.filter(it=>!it.enhanceTag&&!it.isEquip&&!S.selectedNames.has(it.name));
+  S.finalAssign = {};
+  let pool = [];
+  for (const item of otherItems) {
+    for (let q=0;q<item.qty;q++) pool.push({name:item.name, price:item.price, phase:'全員'});
+  }
+  pool = shuffle(pool);
+  const ps = shuffle([...S.participants]);
+  pool.forEach((item,i)=>{
+    const id = ps[i%ps.length];
+    if (!S.finalAssign[id]) S.finalAssign[id] = [];
+    S.finalAssign[id].push(item);
+  });
+
+  document.getElementById('final-result').classList.remove('hidden');
+  document.getElementById('final-result').innerHTML =
+    '<div style="font-size:11px;color:var(--dim2);margin-bottom:8px">🎉 全員抽選結果</div>' +
+    Object.entries(S.finalAssign).map(([id,items])=>{
+      const m=memberById(id);
+      return `<div class="result-card"><div class="result-hd">
+        <span class="result-name">👤 ${m?.name||id}</span>
+        <span class="result-val">合計 <span>${fmt(items.reduce((s,i)=>s+i.price,0))} ◇</span></span>
+        </div>
+        <div class="items-wrap">${items.map(it=>`<div class="item-chip">${it.name}<span class="p">${fmt(it.price)} ◇</span></div>`).join('')}</div>
+      </div>`;
+    }).join('') || '<div class="empty">残りアイテムなし</div>';
+}
+
+// ═══════════════════════════════════════════════
+// STEP 6: FINAL RESULT
+// ═══════════════════════════════════════════════
+function renderFinalResult() {
+  // Merge all assigns
+  const all = {};
+  S.participants.forEach(id=>all[id]=[]);
+  const srcs = [S.groupAssign, S.enhanceAssign, S.equipAssign, S.finalAssign];
+  for (const src of srcs) {
+    for (const [id,items] of Object.entries(src)) {
+      if (!all[id]) all[id]=[];
+      all[id].push(...items);
+    }
+  }
+
+  const totalItems = Object.values(all).reduce((s,a)=>s+a.length,0);
+  const totalVal   = Object.values(all).reduce((s,a)=>s+a.reduce((x,i)=>x+i.price,0),0);
+  document.getElementById('summary-stats').innerHTML = `
+    <div class="stat-box"><div class="stat-val">${S.participants.length}</div><div class="stat-key">参加者数</div></div>
+    <div class="stat-box"><div class="stat-val">${totalItems}</div><div class="stat-key">配布アイテム総数</div></div>
+    <div class="stat-box"><div class="stat-val">${fmt(totalVal)}</div><div class="stat-key">総ダイヤ価値 (◇)</div></div>`;
+
+  document.getElementById('final-cards').innerHTML = S.participants.map(id=>{
+    const m=memberById(id), items=all[id]||[];
+    const tv=items.reduce((s,i)=>s+i.price,0);
+    // 同名アイテムをまとめる（強化書はenhanceTagも含めてキーにする）
+    const grouped = [];
+    const keyMap = {};
+    for (const it of items) {
+      const key = it.name + '|' + (it.enhanceTag||'');
+      if (keyMap[key] !== undefined) {
+        grouped[keyMap[key]].qty++;
+      } else {
+        keyMap[key] = grouped.length;
+        grouped.push({ ...it, qty: 1 });
+      }
+    }
+    return `<div class="result-card">
+      <div class="result-hd">
+        <span class="result-name">👤 ${m?.name||id}</span>
+        ${m?.job?`<span class="tag tag-job result-job-tag">${m.job}</span>`:''}
+        <span class="result-val">合計 <span>${fmt(tv)} ◇</span></span>
+      </div>
+      <div class="items-wrap">
+        ${grouped.map(it=>{
+          let cls='item-chip';
+          if(it.enhanceTag) cls+=' enhance';
+          else if(it.isEquip) cls+=' equip';
+          return `<div class="${cls}">${it.name}${it.qty>1?` <span style="color:var(--blue2);font-size:10px">×${it.qty}</span>`:''}${it.enhanceTag?` <span class="tag tag-enhance${it.enhanceTag==='高級'?' tag-enhance-gold':it.enhanceTag==='上級'?' tag-enhance-up':''}" style="font-size:9px">${it.enhanceTag}</span>`:''}</div>`;
+        }).join('')||'<span style="color:var(--dim);font-size:11px">なし</span>'}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Text output
+  const now = new Date().toLocaleString('ja-JP');
+  let txt = `=== YMIR クランアイテム分配結果 ===\n生成: ${now}\n${'─'.repeat(40)}\n`;
+  for (const id of S.participants) {
+    const m=memberById(id), items=all[id]||[];
+    txt += `\n【${m?.name||id}】  合計: ${fmt(items.reduce((s,i)=>s+i.price,0))} ◇\n`;
+    if (!items.length) { txt += '  （なし）\n'; continue; }
+    // テキストも同名まとめ
+    const tGrouped = [];
+    const tKeyMap = {};
+    for (const it of items) {
+      const key = it.name + '|' + (it.enhanceTag||'');
+      if (tKeyMap[key] !== undefined) { tGrouped[tKeyMap[key]].qty++; }
+      else { tKeyMap[key] = tGrouped.length; tGrouped.push({ ...it, qty: 1 }); }
+    }
+    tGrouped.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+    for (const it of tGrouped) {
+      txt += `  ・${it.name}${it.qty>1?` ×${it.qty}`:''}\n`;
+    }
+  }
+  document.getElementById('text-output').textContent = txt;
+}
+
+function copyText() {
+  navigator.clipboard.writeText(document.getElementById('text-output').textContent).then(()=>{
+    const fb=document.getElementById('copy-fb');
+    fb.style.opacity='1';
+    setTimeout(()=>fb.style.opacity='0',2000);
+  });
+}
+
+// ═══════════════════════════════════════════════
+// LOG SYSTEM
+// ═══════════════════════════════════════════════
+async function getLogIndex() {
+  return await storeGet('ymir_log_index', []);
+}
+
+async function updateLogBadge() {
+  const idx = await getLogIndex();
+  document.getElementById('badge-logs').textContent = idx.length;
+}
+
+async function saveLog() {
+  const txt = document.getElementById('text-output').textContent;
+  if (!txt.trim()) { alert('先に最終結果を表示してください'); return; }
+
+  const idx = await getLogIndex();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('ja-JP', {year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'.');
+  const inputTitle = document.getElementById('log-title-input').value.trim();
+
+  // 自動タイトル: 日付+その日の連番
+  let autoTitle;
+  if (!inputTitle) {
+    const todayLogs = idx.filter(l => l.date.startsWith(dateStr));
+    autoTitle = `${dateStr} #${todayLogs.length + 1}`;
+  }
+  const title = inputTitle || autoTitle;
+  const id = 'log_' + Date.now();
+  const entry = { id, title, date: dateStr, time: now.toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit'}) };
+
+  await storeSet(id, txt);
+  idx.unshift(entry); // 新しいものを先頭に
+  await storeSet('ymir_log_index', idx);
+
+  document.getElementById('log-title-input').value = '';
+  const fb = document.getElementById('save-log-fb');
+  fb.textContent = `✓ 「${title}」を保存しました`;
+  fb.style.opacity = '1';
+  setTimeout(() => fb.style.opacity = '0', 2500);
+  updateLogBadge();
+}
+
+async function renderLogList() {
+  const idx = await getLogIndex();
+  const el = document.getElementById('log-list');
+  if (!idx.length) {
+    el.innerHTML = '<div class="empty">保存済みログはありません</div>';
+    return;
+  }
+  el.innerHTML = idx.map(entry => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)">
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:13px">${entry.title}</div>
+        <div style="font-size:10px;color:var(--dim2);margin-top:2px">${entry.date} ${entry.time}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="viewLog('${entry.id}','${esc(entry.title)}')">👁 閲覧</button>
+      <button class="btn btn-ghost btn-sm" onclick="copyLog('${entry.id}')">📋 コピー</button>
+      <button class="btn btn-danger btn-xs" onclick="deleteLog('${entry.id}')">🗑</button>
+    </div>`).join('');
+}
+
+async function viewLog(id, title) {
+  const txt = await storeGet(id, '');
+  document.getElementById('log-modal-title').textContent = title;
+  document.getElementById('log-modal-body').textContent = txt;
+  document.getElementById('log-modal').classList.remove('hidden');
+}
+
+function closeLogModal() {
+  document.getElementById('log-modal').classList.add('hidden');
+}
+
+function copyLogModal() {
+  const txt = document.getElementById('log-modal-body').textContent;
+  navigator.clipboard.writeText(txt).then(() => {
+    const fb = document.getElementById('log-copy-fb');
+    fb.style.opacity = '1';
+    setTimeout(() => fb.style.opacity = '0', 2000);
+  });
+}
+
+async function copyLog(id) {
+  const txt = await storeGet(id, '');
+  navigator.clipboard.writeText(txt);
+}
+
+async function deleteLog(id) {
+  if (!confirm('このログを削除しますか？')) return;
+  let idx = await getLogIndex();
+  idx = idx.filter(e => e.id !== id);
+  await storeSet('ymir_log_index', idx);
+  await storeDel(id);
+  updateLogBadge();
+  renderLogList();
+}
+
+async function clearAllLogs() {
+  if (!confirm('全ログを削除しますか？')) return;
+  const idx = await getLogIndex();
+  for (const e of idx) { await storeDel(e.id); }
+  await storeSet('ymir_log_index', []);
+  updateLogBadge();
+  renderLogList();
+}
+
+function resetAll() {
+  S.rawItems=[];S.mergedItems=[];S.participants=[];S.selectedNames=new Set();
+  S.groups=[];S.groupAssign={};S.enhanceAssign={};S.equipAssign={};S.finalAssign={};S.enhanceOrder=null;
+  document.getElementById('item-input').value='';
+  showPage('step1');
+  renderParticipantGrid();
+}
+
+// ═══════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+// 強化書ランク重み
+const ENHANCE_RANK_WEIGHT = { '上級': 3, '高級': 2, '一般': 1 };
+
+// 受取済みの強化書ランク重み合計が最小の人を優先して抽選
+function fairPickByWeight(pool, weightSum) {
+  if (!pool.length) return null;
+  const minW = Math.min(...pool.map(id => weightSum[id] || 0));
+  const preferred = pool.filter(id => (weightSum[id] || 0) === minW);
+  return preferred[Math.floor(Math.random() * preferred.length)];
+}
+
+function fmt(n) {
+  if (n === undefined || n === null || isNaN(n)) return '0';
+  const num = Number(n);
+  // Show decimals if not an integer
+  if (!Number.isInteger(num)) {
+    // Up to 4 significant decimal places, strip trailing zeros
+    return parseFloat(num.toFixed(4)).toString();
+  }
+  return num.toLocaleString();
+}
+function esc(s){return s.replace(/'/g,"\\'").replace(/"/g,'&quot;');}
+function safeId(s){return s.replace(/[^\w]/g,'_');}
+function memberById(id){return S.members.find(m=>m.id===id)||{name:id,job:''};}
+</script>
+</body>
+</html>
