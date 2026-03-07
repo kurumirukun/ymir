@@ -1598,7 +1598,7 @@ function renderFinalResult() {
           let cls='item-chip';
           if(it.enhanceTag) cls+=' enhance';
           else if(it.isEquip) cls+=' equip';
-          return `<div class="${cls}">${it.name}${it.qty>1?` <span style="color:var(--blue2);font-size:10px">×${it.qty}</span>`:''}${it.enhanceTag?` <span class="tag tag-enhance${it.enhanceTag==='高級'?' tag-enhance-gold':it.enhanceTag==='上級'?' tag-enhance-up':''}" style="font-size:9px">${it.enhanceTag}</span>`:''}</div>`;
+          return `<div class="${cls}">${it.name}${it.qty>1?` <span style="color:var(--blue2);font-size:10px">×${it.qty}</span>`:''}${it.enhanceTag?` <span class="tag tag-enhance${it.enhanceTag==='高級'?' tag-enhance-gold':it.enhanceTag==='上級'?' tag-enhance-up':''}" style="font-size:9px">${it.enhanceTag}</span>`:''}<span class="p">${fmt(it.price * it.qty)} ◇</span></div>`;
         }).join('')||'<span style="color:var(--dim);font-size:11px">なし</span>'}
       </div>
     </div>`;
