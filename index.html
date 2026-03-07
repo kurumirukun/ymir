@@ -356,7 +356,7 @@ label{display:block;color:var(--dim2);font-size:11px;margin-bottom:5px}
     </div>
     <div class="tbl-wrap">
       <table class="tbl" id="sel-table">
-        <thead><tr><th style="width:36px">選択</th><th>アイテム名</th><th>数量</th><th>単価</th><th>合計</th></tr></thead>
+        <thead><tr><th style="width:36px">選択</th><th>アイテム名</th><th>数量</th><th style="cursor:pointer;user-select:none" onclick="setSelSort('price')">単価 <span id="sort-price-icon">▲</span></th><th style="cursor:pointer;user-select:none" onclick="setSelSort('total')">合計 <span id="sort-total-icon"></span></th></tr></thead>
         <tbody id="sel-tbody"></tbody>
       </table>
     </div>
@@ -627,6 +627,7 @@ function goStep(n) {
   if (n===5) renderStep5();
   if (n===6) renderFinalResult();
   showPage('step'+n);
+  document.querySelector('.main').scrollTop = 0;
 }
 
 // ═══════════════════════════════════════════════
@@ -955,17 +956,36 @@ function updateItemStatus(i, val) {
 // ═══════════════════════════════════════════════
 // STEP 3: SELECT TABLE
 // ═══════════════════════════════════════════════
+let _selSortKey = 'price'; // 'price' | 'total'
+let _selSortAsc = true;
+
+function setSelSort(key) {
+  if (_selSortKey === key) _selSortAsc = !_selSortAsc;
+  else { _selSortKey = key; _selSortAsc = true; }
+  renderSelTable();
+}
+
 function renderSelTable() {
   const eligible = S.mergedItems.filter(it => !it.enhanceTag && !it.isEquip);
-  // 同名をまとめて数量合計
   const nameMap = {};
   for (const it of eligible) {
     if (!nameMap[it.name]) nameMap[it.name] = { ...it, qty: 0 };
     nameMap[it.name].qty += it.qty;
   }
   const deduped = Object.values(nameMap);
-  const sorted = deduped.sort((a,b)=>(a.price*a.qty)-(b.price*b.qty));
-  document.getElementById('sel-tbody').innerHTML = sorted.length ? sorted.map(item => `
+  deduped.sort((a, b) => {
+    const va = _selSortKey === 'total' ? a.price * a.qty : a.price;
+    const vb = _selSortKey === 'total' ? b.price * b.qty : b.price;
+    return _selSortAsc ? va - vb : vb - va;
+  });
+
+  // ソートアイコン更新
+  ['price','total'].forEach(k => {
+    const el = document.getElementById('sort-'+k+'-icon');
+    if (el) el.textContent = _selSortKey === k ? (_selSortAsc ? '▲' : '▼') : '';
+  });
+
+  document.getElementById('sel-tbody').innerHTML = deduped.length ? deduped.map(item => `
     <tr>
       <td><input type="checkbox" ${S.selectedNames.has(item.name)?'checked':''}
         onchange="toggleSel('${esc(item.name)}',this.checked)"></td>
@@ -1305,7 +1325,21 @@ function runEquipLottery() {
 // STEP 5: 残りアイテム ラウンド抽選
 // ═══════════════════════════════════════════════
 
-// 全ラウンドで使用済みのアイテム名セットを返す
+// 残りアイテム全展開（キーは全体の通し番号で固定）
+function _allFinalPool() {
+  const otherItems = S.mergedItems.filter(it => !it.enhanceTag && !it.isEquip && !S.selectedNames.has(it.name));
+  const pool = [];
+  let idx = 0;
+  for (const item of otherItems) {
+    for (let q = 0; q < item.qty; q++) {
+      pool.push({ name: item.name, price: item.price, phase: '全員', _key: item.name + '::' + idx });
+      idx++;
+    }
+  }
+  return pool;
+}
+
+// 全ラウンドで使用済みキーセット
 function _usedFinalItemKeys() {
   const used = new Set();
   for (const r of S.finalRounds) {
@@ -1316,18 +1350,10 @@ function _usedFinalItemKeys() {
   return used;
 }
 
-// 残りアイテム（全ラウンド未使用）を展開して返す
+// 未使用アイテムのみ返す
 function _remainingFinalPool() {
   const used = _usedFinalItemKeys();
-  const otherItems = S.mergedItems.filter(it => !it.enhanceTag && !it.isEquip && !S.selectedNames.has(it.name));
-  const pool = [];
-  for (const item of otherItems) {
-    for (let q = 0; q < item.qty; q++) {
-      const key = item.name + '::' + pool.length;
-      if (!used.has(key)) pool.push({ name: item.name, price: item.price, phase: '全員', _key: key });
-    }
-  }
-  return pool;
+  return _allFinalPool().filter(it => !used.has(it._key));
 }
 
 function addFinalRound() {
@@ -1363,24 +1389,14 @@ function renderFinalRounds() {
   }
 
   container.innerHTML = S.finalRounds.map((round, ri) => {
-    const roundRemaining = (() => {
-      // このラウンドより前のラウンドで使用済みのキー
-      const used = new Set();
-      for (let i = 0; i < ri; i++) {
-        for (const items of Object.values(S.finalRounds[i].assign)) {
-          for (const it of items) used.add(it._key);
-        }
+    // このラウンドより前のラウンドで使用済みのキー
+    const usedBefore = new Set();
+    for (let i = 0; i < ri; i++) {
+      for (const items of Object.values(S.finalRounds[i].assign)) {
+        for (const it of items) usedBefore.add(it._key);
       }
-      const otherItems = S.mergedItems.filter(it => !it.enhanceTag && !it.isEquip && !S.selectedNames.has(it.name));
-      const pool = [];
-      for (const item of otherItems) {
-        for (let q = 0; q < item.qty; q++) {
-          const key = item.name + '::' + pool.length;
-          if (!used.has(key)) pool.push({ name: item.name, price: item.price, _key: key });
-        }
-      }
-      return pool;
-    })();
+    }
+    const roundRemaining = _allFinalPool().filter(it => !usedBefore.has(it._key));
 
     if (round.done) {
       // 完了済みラウンド: 結果表示のみ
@@ -1436,31 +1452,18 @@ function toggleFinalItem(ri, name, checked) {
   if (!round || round.done) return;
 
   // このラウンドより前で使用済みのキー
-  const used = new Set();
+  const usedBefore = new Set();
   for (let i = 0; i < ri; i++) {
     for (const items of Object.values(S.finalRounds[i].assign)) {
-      for (const it of items) used.add(it._key);
-    }
-  }
-  // 既にこのラウンドで選択済みのキー（他のアイテム）
-  for (const k of round.selectedKeys) {
-    const nm = k.split('::')[0];
-    if (nm !== name) used.add(k);
-  }
-
-  // 同名のキーを全部取得（他ラウンドで未使用）
-  const otherItems = S.mergedItems.filter(it => !it.enhanceTag && !it.isEquip && !S.selectedNames.has(it.name));
-  const allKeys = [];
-  let idx = 0;
-  for (const item of otherItems) {
-    for (let q = 0; q < item.qty; q++) {
-      const key = item.name + '::' + idx;
-      if (item.name === name && !used.has(key)) allKeys.push(key);
-      idx++;
+      for (const it of items) usedBefore.add(it._key);
     }
   }
 
-  // チェック状態を更新
+  // 同名で未使用のキーを全取得
+  const allKeys = _allFinalPool()
+    .filter(it => it.name === name && !usedBefore.has(it._key))
+    .map(it => it._key);
+
   for (const k of allKeys) {
     if (checked) round.selectedKeys.add(k);
     else round.selectedKeys.delete(k);
@@ -1479,16 +1482,7 @@ function runFinalRound(ri) {
   if (!round.selectedKeys.size) { alert('アイテムを選択してください'); return; }
 
   // 選択されたアイテムを取得
-  const otherItems = S.mergedItems.filter(it => !it.enhanceTag && !it.isEquip && !S.selectedNames.has(it.name));
-  let pool = [];
-  let idx = 0;
-  for (const item of otherItems) {
-    for (let q = 0; q < item.qty; q++) {
-      const key = item.name + '::' + idx;
-      if (round.selectedKeys.has(key)) pool.push({ name: item.name, price: item.price, phase: '全員', _key: key });
-      idx++;
-    }
-  }
+  let pool = _allFinalPool().filter(it => round.selectedKeys.has(it._key));
   pool.sort((a, b) => b.price - a.price);
 
   // 全ラウンドのweightSumを累積
