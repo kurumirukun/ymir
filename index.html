@@ -1621,7 +1621,7 @@ function renderFinalResult() {
     }
     tGrouped.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
     for (const it of tGrouped) {
-      txt += `  ・${it.name}${it.qty>1?` ×${it.qty}`:''}\n`;
+      txt += `  ・${it.name}${it.enhanceTag?`［${it.enhanceTag}］`:''}${it.qty>1?` ×${it.qty}`:''}\n`;
     }
   }
   document.getElementById('text-output').textContent = txt;
