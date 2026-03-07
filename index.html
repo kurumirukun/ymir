@@ -503,11 +503,17 @@ label{display:block;color:var(--dim2);font-size:11px;margin-bottom:5px}
 
 <!-- LOG DETAIL MODAL -->
 <div class="modal-bg hidden" id="log-modal">
-  <div class="modal" style="width:600px;max-height:80vh">
-    <div class="modal-title" id="log-modal-title"></div>
-    <div class="mono" id="log-modal-body" style="max-height:55vh;font-size:11px"></div>
-    <div class="btn-row" style="justify-content:flex-end;margin-top:12px">
-      <button class="btn btn-gold btn-sm" onclick="copyLogModal()">📋 コピー</button>
+  <div class="modal" style="width:min(900px,95vw);max-height:88vh;display:flex;flex-direction:column">
+    <div class="modal-title" id="log-modal-title" style="flex-shrink:0"></div>
+    <div style="flex-shrink:0;display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn btn-ghost btn-sm" onclick="switchLogTab('summary')" id="ltab-summary">📊 サマリー</button>
+      <button class="btn btn-ghost btn-sm" onclick="switchLogTab('rounds')" id="ltab-rounds">🎲 各ラウンド</button>
+      <button class="btn btn-ghost btn-sm" onclick="switchLogTab('items')" id="ltab-items">📦 アイテム別</button>
+      <button class="btn btn-ghost btn-sm" onclick="switchLogTab('text')" id="ltab-text">📝 テキスト</button>
+    </div>
+    <div id="log-modal-body" style="overflow-y:auto;flex:1;font-size:12px"></div>
+    <div class="btn-row" style="justify-content:flex-end;margin-top:12px;flex-shrink:0">
+      <button class="btn btn-gold btn-sm" onclick="copyLogText()">📋 テキストコピー</button>
       <span id="log-copy-fb" style="color:var(--green);font-size:11px;opacity:0;transition:opacity .3s;margin-left:6px">✓</span>
       <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="closeLogModal()">閉じる</button>
     </div>
@@ -1745,6 +1751,35 @@ function buildFullLog(title, now) {
   return lines.join('\n');
 }
 
+function buildLogData(title, now) {
+  const ts = now.toLocaleString('ja-JP', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+  // 参加者情報
+  const participants = S.participants.map(id => {
+    const m = memberById(id);
+    return { id, name: m?.name || id, job: m?.job || '' };
+  });
+
+  // アイテム一覧
+  const itemMap = {};
+  for (const it of S.mergedItems) {
+    if (!itemMap[it.name]) itemMap[it.name] = { name: it.name, qty: 0, price: it.price, enhanceTag: it.enhanceTag, isEquip: it.isEquip };
+    itemMap[it.name].qty += it.qty;
+  }
+  const items = Object.values(itemMap);
+
+  // 各抽選結果
+  const groupAssign   = Object.fromEntries(Object.entries(S.groupAssign).map(([id,its])=>[id,its.map(i=>({name:i.name,price:i.price,enhanceTag:i.enhanceTag||''}))]) );
+  const enhanceAssign = Object.fromEntries(Object.entries(S.enhanceAssign).map(([id,its])=>[id,its.map(i=>({name:i.name,price:i.price,enhanceTag:i.enhanceTag||''}))]) );
+  const equipAssign   = Object.fromEntries(Object.entries(S.equipAssign).map(([id,its])=>[id,its.map(i=>({name:i.name,price:i.price}))]) );
+  const finalRounds   = S.finalRounds.filter(r=>r.done).map((r,ri) => ({
+    label: `ラウンド${ri+1}`,
+    assign: Object.fromEntries(Object.entries(r.assign).map(([id,its])=>[id,its.map(i=>({name:i.name,price:i.price}))]))
+  }));
+
+  return { title, ts, participants, items, groupAssign, enhanceAssign, equipAssign, finalRounds };
+}
+
 async function saveLog() {
   if (!S.participants.length) { alert('先に最終結果を表示してください'); return; }
 
@@ -1756,10 +1791,12 @@ async function saveLog() {
   const title = inputTitle || `${dateStr} #${todayLogs.length + 1}`;
   const id = 'log_' + Date.now();
 
-  const fullLog = buildFullLog(title, now);
-  const entry = { id, title, date: dateStr, time: now.toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) };
+  const data = buildLogData(title, now);
+  const text = buildFullLog(title, now);
+  data._text = text; // テキストも一緒に保存
 
-  await storeSet(id, fullLog);
+  const entry = { id, title, date: dateStr, time: now.toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) };
+  await storeSet(id, data);
   idx.unshift(entry);
   await storeSet('ymir_log_index', idx);
 
@@ -1771,38 +1808,133 @@ async function saveLog() {
   updateLogBadge();
 }
 
-async function renderLogList() {
-  const idx = await getLogIndex();
-  const el = document.getElementById('log-list');
-  if (!idx.length) {
-    el.innerHTML = '<div class="empty">保存済みログはありません</div>';
-    return;
-  }
-  el.innerHTML = idx.map(entry => `
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)">
-      <div style="flex:1">
-        <div style="font-weight:700;font-size:13px">${entry.title}</div>
-        <div style="font-size:10px;color:var(--dim2);margin-top:2px">${entry.date} ${entry.time}</div>
-      </div>
-      <button class="btn btn-ghost btn-sm" onclick="viewLog('${entry.id}','${esc(entry.title)}')">👁 閲覧</button>
-      <button class="btn btn-ghost btn-sm" onclick="copyLog('${entry.id}')">📋 コピー</button>
-      <button class="btn btn-danger btn-xs" onclick="deleteLog('${entry.id}')">🗑</button>
-    </div>`).join('');
-}
+// 現在開いているログデータ
+let _currentLogData = null;
+let _currentLogTab = 'summary';
 
 async function viewLog(id, title) {
-  const txt = await storeGet(id, '');
+  const data = await storeGet(id, null);
+  _currentLogData = data;
   document.getElementById('log-modal-title').textContent = title;
-  document.getElementById('log-modal-body').textContent = txt;
   document.getElementById('log-modal').classList.remove('hidden');
+  switchLogTab('summary');
+}
+
+function switchLogTab(tab) {
+  _currentLogTab = tab;
+  ['summary','rounds','items','text'].forEach(t => {
+    document.getElementById('ltab-'+t).style.borderColor = t === tab ? 'var(--gold)' : '';
+    document.getElementById('ltab-'+t).style.color = t === tab ? 'var(--gold)' : '';
+  });
+  if (!_currentLogData) { document.getElementById('log-modal-body').innerHTML = '<div class="empty">データなし</div>'; return; }
+  const d = _currentLogData;
+
+  if (tab === 'summary') renderLogSummary(d);
+  else if (tab === 'rounds') renderLogRounds(d);
+  else if (tab === 'items') renderLogItems(d);
+  else renderLogText(d);
+}
+
+const _tblStyle = `style="width:100%;border-collapse:collapse;font-size:12px"`;
+const _th = `style="background:var(--bg2);padding:6px 8px;text-align:left;border:1px solid var(--border);white-space:nowrap"`;
+const _td = `style="padding:5px 8px;border:1px solid var(--border);vertical-align:top"`;
+const _tdR = `style="padding:5px 8px;border:1px solid var(--border);text-align:right;color:var(--gold)"`;
+
+function renderLogSummary(d) {
+  // 全員の合計を計算
+  const allAssign = {};
+  d.participants.forEach(p => allAssign[p.id] = []);
+  const srcs = [d.groupAssign, d.enhanceAssign, d.equipAssign, ...d.finalRounds.map(r=>r.assign)];
+  for (const src of srcs) for (const [id,its] of Object.entries(src)) { if (!allAssign[id]) allAssign[id]=[]; allAssign[id].push(...its); }
+
+  let html = `<div style="color:var(--dim2);font-size:11px;margin-bottom:10px">保存日時: ${d.ts}</div>`;
+
+  // 参加者サマリー表
+  html += `<div style="font-weight:700;margin-bottom:6px;color:var(--gold)">👥 参加者別 獲得アイテム・合計</div>`;
+  html += `<table ${_tblStyle}><thead><tr>
+    <th ${_th}>プレイヤー</th><th ${_th}>職業</th><th ${_th}>獲得アイテム</th><th ${_th} style="text-align:right">合計 ◇</th>
+  </tr></thead><tbody>`;
+  for (const p of d.participants) {
+    const items = allAssign[p.id] || [];
+    const total = items.reduce((s,i)=>s+i.price,0);
+    // まとめ表示
+    const gm = {};
+    for (const it of items) { const k=it.name+'|'+(it.enhanceTag||''); if(!gm[k]) gm[k]={...it,qty:0}; gm[k].qty++; }
+    const itemStr = Object.values(gm).sort((a,b)=>a.name.localeCompare(b.name,'ja'))
+      .map(it=>`${it.name}${it.enhanceTag?`［${it.enhanceTag}］`:''}${it.qty>1?` ×${it.qty}`:''}`).join('　');
+    html += `<tr><td ${_td}><strong>${p.name}</strong></td><td ${_td}>${p.job||'－'}</td><td ${_td}>${itemStr||'－'}</td><td ${_tdR}>${fmt(total)}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+  document.getElementById('log-modal-body').innerHTML = html;
+}
+
+function renderLogRounds(d) {
+  let html = '';
+  const rounds = [
+    { label: 'グループ抽選', assign: d.groupAssign },
+    { label: '強化書抽選', assign: d.enhanceAssign, enhance: true },
+    { label: '装備抽選', assign: d.equipAssign },
+    ...d.finalRounds
+  ];
+
+  for (const round of rounds) {
+    const hasData = Object.values(round.assign).some(its=>its.length);
+    if (!hasData) continue;
+    html += `<div style="font-weight:700;margin:14px 0 6px;color:var(--gold)">🎲 ${round.label}</div>`;
+    html += `<table ${_tblStyle}><thead><tr><th ${_th}>プレイヤー</th><th ${_th}>獲得アイテム</th><th ${_th} style="text-align:right">小計 ◇</th></tr></thead><tbody>`;
+    for (const p of d.participants) {
+      const items = round.assign[p.id] || [];
+      if (!items.length) continue;
+      const total = items.reduce((s,i)=>s+i.price,0);
+      const itemStr = items.map(it=>`${it.name}${it.enhanceTag?`［${it.enhanceTag}］`:''}`).join('　');
+      html += `<tr><td ${_td}><strong>${p.name}</strong></td><td ${_td}>${itemStr}</td><td ${_tdR}>${fmt(total)}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+  document.getElementById('log-modal-body').innerHTML = html || '<div class="empty">抽選データなし</div>';
+}
+
+function renderLogItems(d) {
+  // アイテム → 当選者の逆引き表
+  const allAssign = {};
+  d.participants.forEach(p => allAssign[p.id] = []);
+  const roundLabels = ['グループ','強化書','装備',...d.finalRounds.map(r=>r.label)];
+  const srcs = [d.groupAssign, d.enhanceAssign, d.equipAssign, ...d.finalRounds.map(r=>r.assign)];
+  const itemWinner = {}; // itemKey -> {name, enhanceTag, price, winner, round}
+  srcs.forEach((src, si) => {
+    for (const [id, its] of Object.entries(src)) {
+      const p = d.participants.find(p=>p.id===id);
+      for (const it of its) {
+        const key = it.name+'|'+(it.enhanceTag||'')+'|'+si+'|'+id;
+        itemWinner[key] = { name: it.name, enhanceTag: it.enhanceTag||'', price: it.price, winner: p?.name||id, round: roundLabels[si] };
+      }
+    }
+  });
+
+  let html = `<table ${_tblStyle}><thead><tr>
+    <th ${_th}>アイテム名</th><th ${_th}>ランク/タグ</th><th ${_th} style="text-align:right">単価 ◇</th><th ${_th}>抽選区分</th><th ${_th}>当選者</th>
+  </tr></thead><tbody>`;
+  const rows = Object.values(itemWinner).sort((a,b)=>b.price-a.price||a.name.localeCompare(b.name,'ja'));
+  for (const row of rows) {
+    html += `<tr><td ${_td}>${row.name}</td><td ${_td}>${row.enhanceTag||'－'}</td><td ${_tdR}>${fmt(row.price)}</td><td ${_td}>${row.round}</td><td ${_td}><strong>${row.winner}</strong></td></tr>`;
+  }
+  html += `</tbody></table>`;
+  document.getElementById('log-modal-body').innerHTML = html;
+}
+
+function renderLogText(d) {
+  const txt = d._text || '(テキストデータなし)';
+  document.getElementById('log-modal-body').innerHTML = `<pre style="font-size:11px;white-space:pre-wrap;font-family:var(--font-mono,monospace)">${txt}</pre>`;
 }
 
 function closeLogModal() {
   document.getElementById('log-modal').classList.add('hidden');
+  _currentLogData = null;
 }
 
-function copyLogModal() {
-  const txt = document.getElementById('log-modal-body').textContent;
+async function copyLogText() {
+  const txt = _currentLogData?._text || '';
+  if (!txt) { alert('テキストデータがありません'); return; }
   navigator.clipboard.writeText(txt).then(() => {
     const fb = document.getElementById('log-copy-fb');
     fb.style.opacity = '1';
@@ -1811,8 +1943,9 @@ function copyLogModal() {
 }
 
 async function copyLog(id) {
-  const txt = await storeGet(id, '');
-  navigator.clipboard.writeText(txt);
+  const data = await storeGet(id, null);
+  const txt = data?._text || (typeof data === 'string' ? data : '');
+  if (txt) navigator.clipboard.writeText(txt);
 }
 
 async function deleteLog(id) {
