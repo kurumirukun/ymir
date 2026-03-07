@@ -1269,7 +1269,8 @@ function runEnhanceLottery() {
 }
 
 function runEquipLottery() {
-  const equipItems = S.mergedItems.filter(it=>it.isEquip);
+  // 価格の高い順に抽選
+  const equipItems = [...S.mergedItems.filter(it=>it.isEquip)].sort((a,b)=>b.price-a.price);
   S.equipAssign = {};
   const weightSum = {};
   S.participants.forEach(id => weightSum[id] = 0);
@@ -1277,17 +1278,15 @@ function runEquipLottery() {
   for (const item of equipItems) {
     const jobSel = document.getElementById('eq-job-'+safeId(item.name));
     const job = jobSel ? jobSel.value : '';
-    for (let q=0;q<item.qty;q++) {
-      let pool = job
-        ? S.participants.filter(id=>memberById(id)?.job===job)
-        : S.participants;
-      if (!pool.length) pool = [...S.participants];
-      const winner = fairPickByWeight(pool, weightSum);
-      if (!winner) continue;
-      weightSum[winner] = (weightSum[winner] || 0) + 1;
-      if (!S.equipAssign[winner]) S.equipAssign[winner] = [];
-      S.equipAssign[winner].push({name:item.name, price:item.price, isEquip:true, equipStatus:item.equipStatus, phase:'装備'});
-    }
+    let pool = job
+      ? S.participants.filter(id=>memberById(id)?.job===job)
+      : [...S.participants];
+    if (!pool.length) pool = [...S.participants];
+    const winner = fairPickByWeight(pool, weightSum);
+    if (!winner) continue;
+    weightSum[winner] = (weightSum[winner] || 0) + (item.price || 1);
+    if (!S.equipAssign[winner]) S.equipAssign[winner] = [];
+    S.equipAssign[winner].push({name:item.name, price:item.price, isEquip:true, equipStatus:item.equipStatus, phase:'装備'});
   }
   document.getElementById('equip-result').classList.remove('hidden');
   document.getElementById('equip-result').innerHTML =
@@ -1301,19 +1300,27 @@ function runEquipLottery() {
 }
 
 function runFinalLottery() {
+  // 価格の高い順に抽選・価格をweightSumに加算して均等化
   const otherItems = S.mergedItems.filter(it=>!it.enhanceTag&&!it.isEquip&&!S.selectedNames.has(it.name));
   S.finalAssign = {};
+
+  // 全アイテムを展開して価格降順ソート
   let pool = [];
   for (const item of otherItems) {
     for (let q=0;q<item.qty;q++) pool.push({name:item.name, price:item.price, phase:'全員'});
   }
-  pool = shuffle(pool);
-  const ps = shuffle([...S.participants]);
-  pool.forEach((item,i)=>{
-    const id = ps[i%ps.length];
-    if (!S.finalAssign[id]) S.finalAssign[id] = [];
-    S.finalAssign[id].push(item);
-  });
+  pool.sort((a,b) => b.price - a.price);
+
+  const weightSum = {};
+  S.participants.forEach(id => weightSum[id] = 0);
+
+  for (const item of pool) {
+    const winner = fairPickByWeight([...S.participants], weightSum);
+    if (!winner) continue;
+    weightSum[winner] = (weightSum[winner] || 0) + (item.price || 1);
+    if (!S.finalAssign[winner]) S.finalAssign[winner] = [];
+    S.finalAssign[winner].push(item);
+  }
 
   document.getElementById('final-result').classList.remove('hidden');
   document.getElementById('final-result').innerHTML =
