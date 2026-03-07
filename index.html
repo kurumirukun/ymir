@@ -431,13 +431,13 @@ label{display:block;color:var(--dim2);font-size:11px;margin-bottom:5px}
 
   <!-- 残り高価格 -->
   <div class="panel">
-    <div class="panel-hd">👑 残りアイテム — 全員抽選</div>
-    <div class="info">グループ振り分け・強化書・装備抽選の残りを全参加者で抽選します。</div>
+    <div class="panel-hd">👑 残りアイテム — ラウンド抽選</div>
+    <div class="info">アイテムを選択して抽選→残りをさらに選択して抽選、と段階的に実行できます。前のラウンドで当選した人は次のラウンドで当たりにくくなります。</div>
     <div id="remaining-list"></div>
-    <div class="lottery-wrap">
-      <button class="btn-lottery" onclick="runFinalLottery()">🎰 全員抽選を実行！</button>
+    <div id="final-rounds"></div>
+    <div class="btn-row" style="margin-top:12px">
+      <button class="btn btn-ghost" onclick="addFinalRound()">➕ ラウンドを追加</button>
     </div>
-    <div id="final-result" class="hidden" style="margin-top:14px"></div>
   </div>
 
   <div class="btn-row" style="justify-content:space-between">
@@ -581,7 +581,8 @@ const S = {
   groupAssign: {},    // name -> [{name,price,phase}]
   enhanceAssign: {},
   equipAssign: {},
-  finalAssign: {},
+  finalAssign: {},    // 全ラウンド合算（後方互換用）
+  finalRounds: [],    // [{selectedNames:Set, assign:{id->[items]}, done:false}]
   enhanceOrder: null, // ordering for enhance lottery
 
   // Price cache: itemName -> {price, enhanceTag, isEquip, equipStatus}
@@ -1119,15 +1120,16 @@ function renderStep5() {
       </div>`).join('');
   }
 
-  // Remaining
+  // Remaining — ラウンド初期化
   const remEl = document.getElementById('remaining-list');
   if (!otherItems.length) {
     remEl.innerHTML = '<div class="empty">残りアイテムなし</div>';
-  } else {
-    remEl.innerHTML = '<div class="items-wrap" style="margin-bottom:12px">' +
-      otherItems.map(it=>`<div class="item-chip">${it.name} × ${it.qty}<span class="p">${fmt(it.price*it.qty)} ◇</span></div>`).join('') +
-      '</div>';
   }
+  // ラウンドが0件なら最初の1件を自動追加
+  if (S.finalRounds.length === 0 && otherItems.length) {
+    S.finalRounds.push({ selectedKeys: new Set(), assign: {}, done: false });
+  }
+  renderFinalRounds();
 }
 
 function renderEnhanceOrderList(enhanceItems) {
@@ -1299,41 +1301,227 @@ function runEquipLottery() {
     }).join('') : '<div class="empty">装備アイテムがありません</div>');
 }
 
-function runFinalLottery() {
-  // 価格の高い順に抽選・価格をweightSumに加算して均等化
-  const otherItems = S.mergedItems.filter(it=>!it.enhanceTag&&!it.isEquip&&!S.selectedNames.has(it.name));
-  S.finalAssign = {};
+// ═══════════════════════════════════════════════
+// STEP 5: 残りアイテム ラウンド抽選
+// ═══════════════════════════════════════════════
 
-  // 全アイテムを展開して価格降順ソート
-  let pool = [];
-  for (const item of otherItems) {
-    for (let q=0;q<item.qty;q++) pool.push({name:item.name, price:item.price, phase:'全員'});
+// 全ラウンドで使用済みのアイテム名セットを返す
+function _usedFinalItemKeys() {
+  const used = new Set();
+  for (const r of S.finalRounds) {
+    for (const items of Object.values(r.assign)) {
+      for (const it of items) used.add(it._key);
+    }
   }
-  pool.sort((a,b) => b.price - a.price);
+  return used;
+}
 
+// 残りアイテム（全ラウンド未使用）を展開して返す
+function _remainingFinalPool() {
+  const used = _usedFinalItemKeys();
+  const otherItems = S.mergedItems.filter(it => !it.enhanceTag && !it.isEquip && !S.selectedNames.has(it.name));
+  const pool = [];
+  for (const item of otherItems) {
+    for (let q = 0; q < item.qty; q++) {
+      const key = item.name + '::' + pool.length;
+      if (!used.has(key)) pool.push({ name: item.name, price: item.price, phase: '全員', _key: key });
+    }
+  }
+  return pool;
+}
+
+function addFinalRound() {
+  // 前のラウンドが未実行なら追加しない
+  if (S.finalRounds.length > 0 && !S.finalRounds[S.finalRounds.length - 1].done) {
+    alert('前のラウンドを先に実行してください');
+    return;
+  }
+  const remaining = _remainingFinalPool();
+  if (!remaining.length) { alert('残りアイテムがありません'); return; }
+
+  S.finalRounds.push({ selectedKeys: new Set(), assign: {}, done: false });
+  renderFinalRounds();
+}
+
+function renderFinalRounds() {
+  const container = document.getElementById('final-rounds');
+  const remaining = _remainingFinalPool();
+
+  // 残りアイテム一覧を更新
+  const remEl = document.getElementById('remaining-list');
+  if (!remaining.length && S.finalRounds.every(r => r.done)) {
+    remEl.innerHTML = '<div class="empty" style="margin-bottom:8px">残りアイテムはすべて抽選済みです</div>';
+  } else if (remaining.length) {
+    // 名前でまとめて表示
+    const nm = {};
+    for (const it of remaining) { nm[it.name] = (nm[it.name]||0) + 1; }
+    remEl.innerHTML = '<div class="items-wrap" style="margin-bottom:12px">' +
+      Object.entries(nm).map(([name, qty]) => {
+        const price = remaining.find(i=>i.name===name)?.price || 0;
+        return `<div class="item-chip">${name}${qty>1?` × ${qty}`:''}<span class="p">${fmt(price*qty)} ◇</span></div>`;
+      }).join('') + '</div>';
+  }
+
+  container.innerHTML = S.finalRounds.map((round, ri) => {
+    const roundRemaining = (() => {
+      // このラウンドより前のラウンドで使用済みのキー
+      const used = new Set();
+      for (let i = 0; i < ri; i++) {
+        for (const items of Object.values(S.finalRounds[i].assign)) {
+          for (const it of items) used.add(it._key);
+        }
+      }
+      const otherItems = S.mergedItems.filter(it => !it.enhanceTag && !it.isEquip && !S.selectedNames.has(it.name));
+      const pool = [];
+      for (const item of otherItems) {
+        for (let q = 0; q < item.qty; q++) {
+          const key = item.name + '::' + pool.length;
+          if (!used.has(key)) pool.push({ name: item.name, price: item.price, _key: key });
+        }
+      }
+      return pool;
+    })();
+
+    if (round.done) {
+      // 完了済みラウンド: 結果表示のみ
+      const resultHtml = S.participants.map(id => {
+        const m = memberById(id);
+        const items = round.assign[id] || [];
+        if (!items.length) return '';
+        return `<div class="result-card"><div class="result-hd">
+          <span class="result-name">👤 ${m?.name||id}</span>
+          <span class="result-val">合計 <span>${fmt(items.reduce((s,i)=>s+i.price,0))} ◇</span></span>
+        </div>
+        <div class="items-wrap">${items.map(it=>`<div class="item-chip">${it.name}<span class="p">${fmt(it.price)} ◇</span></div>`).join('')}</div>
+        </div>`;
+      }).join('');
+      return `<div class="panel" style="margin-top:12px;border:1px solid var(--border)">
+        <div class="panel-hd" style="color:var(--green)">✅ ラウンド ${ri+1} — 完了</div>
+        ${resultHtml || '<div class="empty">対象なし</div>'}
+      </div>`;
+    }
+
+    // 未実行ラウンド: アイテム選択UI
+    // 名前でまとめて重複排除
+    const nm = {};
+    for (const it of roundRemaining) {
+      if (!nm[it.name]) nm[it.name] = { name: it.name, price: it.price, keys: [] };
+      nm[it.name].keys.push(it._key);
+    }
+    const itemRows = Object.values(nm).map(g => {
+      const sel = g.keys.some(k => round.selectedKeys.has(k));
+      return `<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--border);cursor:pointer">
+        <input type="checkbox" ${sel?'checked':''} onchange="toggleFinalItem(${ri},'${g.name}',this.checked)">
+        <span style="flex:1"><strong>${g.name}</strong>${g.keys.length>1?` <span style='color:var(--blue2);font-size:10px'>× ${g.keys.length}</span>`:''}</span>
+        <span style="color:var(--gold);font-size:11px">${fmt(g.price * g.keys.length)} ◇</span>
+      </label>`;
+    }).join('');
+
+    return `<div class="panel" style="margin-top:12px;border:1px solid var(--border)">
+      <div class="panel-hd" style="justify-content:space-between">
+        🎰 ラウンド ${ri+1}
+        <button class="btn btn-danger btn-xs" onclick="removeFinalRound(${ri})">削除</button>
+      </div>
+      <div style="margin-bottom:10px;font-size:12px;color:var(--dim2)">抽選するアイテムを選択してください</div>
+      <div style="margin-bottom:12px">${itemRows || '<div class="empty">選択できるアイテムがありません</div>'}</div>
+      <div class="lottery-wrap">
+        <button class="btn-lottery" onclick="runFinalRound(${ri})">🎰 ラウンド ${ri+1} を実行！</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleFinalItem(ri, name, checked) {
+  const round = S.finalRounds[ri];
+  if (!round || round.done) return;
+
+  // このラウンドより前で使用済みのキー
+  const used = new Set();
+  for (let i = 0; i < ri; i++) {
+    for (const items of Object.values(S.finalRounds[i].assign)) {
+      for (const it of items) used.add(it._key);
+    }
+  }
+  // 既にこのラウンドで選択済みのキー（他のアイテム）
+  for (const k of round.selectedKeys) {
+    const nm = k.split('::')[0];
+    if (nm !== name) used.add(k);
+  }
+
+  // 同名のキーを全部取得（他ラウンドで未使用）
+  const otherItems = S.mergedItems.filter(it => !it.enhanceTag && !it.isEquip && !S.selectedNames.has(it.name));
+  const allKeys = [];
+  let idx = 0;
+  for (const item of otherItems) {
+    for (let q = 0; q < item.qty; q++) {
+      const key = item.name + '::' + idx;
+      if (item.name === name && !used.has(key)) allKeys.push(key);
+      idx++;
+    }
+  }
+
+  // チェック状態を更新
+  for (const k of allKeys) {
+    if (checked) round.selectedKeys.add(k);
+    else round.selectedKeys.delete(k);
+  }
+  renderFinalRounds();
+}
+
+function removeFinalRound(ri) {
+  S.finalRounds.splice(ri, 1);
+  renderFinalRounds();
+}
+
+function runFinalRound(ri) {
+  const round = S.finalRounds[ri];
+  if (!round || round.done) return;
+  if (!round.selectedKeys.size) { alert('アイテムを選択してください'); return; }
+
+  // 選択されたアイテムを取得
+  const otherItems = S.mergedItems.filter(it => !it.enhanceTag && !it.isEquip && !S.selectedNames.has(it.name));
+  let pool = [];
+  let idx = 0;
+  for (const item of otherItems) {
+    for (let q = 0; q < item.qty; q++) {
+      const key = item.name + '::' + idx;
+      if (round.selectedKeys.has(key)) pool.push({ name: item.name, price: item.price, phase: '全員', _key: key });
+      idx++;
+    }
+  }
+  pool.sort((a, b) => b.price - a.price);
+
+  // 全ラウンドのweightSumを累積
   const weightSum = {};
   S.participants.forEach(id => weightSum[id] = 0);
+  for (let i = 0; i < ri; i++) {
+    for (const [id, items] of Object.entries(S.finalRounds[i].assign)) {
+      weightSum[id] = (weightSum[id] || 0) + items.reduce((s, it) => s + (it.price || 1), 0);
+    }
+  }
 
+  round.assign = {};
   for (const item of pool) {
     const winner = fairPickByWeight([...S.participants], weightSum);
     if (!winner) continue;
     weightSum[winner] = (weightSum[winner] || 0) + (item.price || 1);
-    if (!S.finalAssign[winner]) S.finalAssign[winner] = [];
-    S.finalAssign[winner].push(item);
+    if (!round.assign[winner]) round.assign[winner] = [];
+    round.assign[winner].push(item);
   }
 
-  document.getElementById('final-result').classList.remove('hidden');
-  document.getElementById('final-result').innerHTML =
-    '<div style="font-size:11px;color:var(--dim2);margin-bottom:8px">🎉 全員抽選結果</div>' +
-    Object.entries(S.finalAssign).map(([id,items])=>{
-      const m=memberById(id);
-      return `<div class="result-card"><div class="result-hd">
-        <span class="result-name">👤 ${m?.name||id}</span>
-        <span class="result-val">合計 <span>${fmt(items.reduce((s,i)=>s+i.price,0))} ◇</span></span>
-        </div>
-        <div class="items-wrap">${items.map(it=>`<div class="item-chip">${it.name}<span class="p">${fmt(it.price)} ◇</span></div>`).join('')}</div>
-      </div>`;
-    }).join('') || '<div class="empty">残りアイテムなし</div>';
+  round.done = true;
+
+  // finalAssign を全ラウンド合算で更新
+  S.finalAssign = {};
+  S.participants.forEach(id => S.finalAssign[id] = []);
+  for (const r of S.finalRounds) {
+    for (const [id, items] of Object.entries(r.assign)) {
+      if (!S.finalAssign[id]) S.finalAssign[id] = [];
+      S.finalAssign[id].push(...items);
+    }
+  }
+
+  renderFinalRounds();
 }
 
 // ═══════════════════════════════════════════════
@@ -1433,27 +1621,152 @@ async function updateLogBadge() {
   document.getElementById('badge-logs').textContent = idx.length;
 }
 
+function buildFullLog(title, now) {
+  const lines = [];
+  const ts = now.toLocaleString('ja-JP', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const sep  = '═'.repeat(44);
+  const sep2 = '─'.repeat(44);
+
+  lines.push(sep);
+  lines.push(`  YMIR クランアイテム分配 抽選ログ`);
+  lines.push(`  タイトル : ${title}`);
+  lines.push(`  保存日時 : ${ts}  ※タイムスタンプはサーバーに記録されます`);
+  lines.push(sep);
+
+  // ── 参加者 ──────────────────────────────
+  lines.push('');
+  lines.push('【参加者一覧】');
+  S.participants.forEach(id => {
+    const m = memberById(id);
+    lines.push(`  ・${m.name}${m.job ? `（${m.job}）` : ''}`);
+  });
+
+  // ── アイテム一覧 ─────────────────────────
+  lines.push('');
+  lines.push('【アイテム一覧・価格設定】');
+  // 名前でまとめて表示
+  const itemMap = {};
+  for (const it of S.mergedItems) {
+    if (!itemMap[it.name]) itemMap[it.name] = { ...it, qty: 0 };
+    itemMap[it.name].qty += it.qty;
+  }
+  Object.values(itemMap).forEach(it => {
+    const tag = it.enhanceTag ? `[強化書:${it.enhanceTag}]` : it.isEquip ? '[装備]' : '';
+    lines.push(`  ・${it.name}${it.qty>1?` ×${it.qty}`:''} ${tag}  ${fmt(it.price)} ◇`);
+  });
+
+  // ── 強化書抽選設定 ───────────────────────
+  const enhanceItems = S.mergedItems.filter(it => it.enhanceTag);
+  if (enhanceItems.length) {
+    lines.push('');
+    lines.push('【強化書 抽選設定・順序】');
+    const order = S.enhanceOrder || enhanceItems.map((_,i)=>i);
+    order.forEach((origIdx, pos) => {
+      const item = enhanceItems[origIdx];
+      if (!item) return;
+      const job = S.enhanceJobMap[origIdx] || '全員';
+      const numLabel = item.totalQty > 1 ? ` #${item.unitIndex+1}` : '';
+      lines.push(`  ${pos+1}. ${item.name}${numLabel}［${item.enhanceTag}］→ 対象: ${job}`);
+    });
+  }
+
+  // ── 各抽選結果 ───────────────────────────
+  // グループ
+  if (Object.keys(S.groupAssign).length) {
+    lines.push('');
+    lines.push('【グループ抽選結果】');
+    for (const id of S.participants) {
+      const m = memberById(id);
+      const items = S.groupAssign[id] || [];
+      if (!items.length) continue;
+      lines.push(`  ${m.name} : ${items.map(it=>it.name).join('、')}`);
+    }
+  }
+
+  // 強化書
+  if (Object.keys(S.enhanceAssign).length) {
+    lines.push('');
+    lines.push('【強化書抽選結果】');
+    for (const id of S.participants) {
+      const m = memberById(id);
+      const items = S.enhanceAssign[id] || [];
+      if (!items.length) continue;
+      lines.push(`  ${m.name} : ${items.map(it=>`${it.name}［${it.enhanceTag}］`).join('、')}`);
+    }
+  }
+
+  // 装備
+  if (Object.keys(S.equipAssign).length) {
+    lines.push('');
+    lines.push('【装備抽選結果】');
+    for (const id of S.participants) {
+      const m = memberById(id);
+      const items = S.equipAssign[id] || [];
+      if (!items.length) continue;
+      lines.push(`  ${m.name} : ${items.map(it=>it.name).join('、')}`);
+    }
+  }
+
+  // 全員
+  if (Object.keys(S.finalAssign).length) {
+    lines.push('');
+    lines.push('【全員抽選結果】');
+    for (const id of S.participants) {
+      const m = memberById(id);
+      const items = S.finalAssign[id] || [];
+      if (!items.length) continue;
+      lines.push(`  ${m.name} : ${items.map(it=>it.name).join('、')}`);
+    }
+  }
+
+  // ── 最終分配結果 ─────────────────────────
+  lines.push('');
+  lines.push(sep2);
+  lines.push('【最終分配結果】');
+  const all = {};
+  S.participants.forEach(id => all[id] = []);
+  for (const src of [S.groupAssign, S.enhanceAssign, S.equipAssign, S.finalAssign]) {
+    for (const [id, items] of Object.entries(src)) {
+      if (!all[id]) all[id] = [];
+      all[id].push(...items);
+    }
+  }
+  for (const id of S.participants) {
+    const m = memberById(id), items = all[id] || [];
+    lines.push(`\n  【${m.name}】  合計: ${fmt(items.reduce((s,i)=>s+i.price,0))} ◇`);
+    if (!items.length) { lines.push('    （なし）'); continue; }
+    const grouped = [];
+    const km = {};
+    for (const it of items) {
+      const k = it.name+'|'+(it.enhanceTag||'');
+      if (km[k]!==undefined) grouped[km[k]].qty++;
+      else { km[k]=grouped.length; grouped.push({...it,qty:1}); }
+    }
+    grouped.sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+    grouped.forEach(it => lines.push(`    ・${it.name}${it.qty>1?` ×${it.qty}`:''}`));
+  }
+  lines.push('');
+  lines.push(sep);
+
+  return lines.join('\n');
+}
+
 async function saveLog() {
-  const txt = document.getElementById('text-output').textContent;
-  if (!txt.trim()) { alert('先に最終結果を表示してください'); return; }
+  if (!S.participants.length) { alert('先に最終結果を表示してください'); return; }
 
   const idx = await getLogIndex();
   const now = new Date();
   const dateStr = now.toLocaleDateString('ja-JP', {year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'.');
   const inputTitle = document.getElementById('log-title-input').value.trim();
-
-  // 自動タイトル: 日付+その日の連番
-  let autoTitle;
-  if (!inputTitle) {
-    const todayLogs = idx.filter(l => l.date.startsWith(dateStr));
-    autoTitle = `${dateStr} #${todayLogs.length + 1}`;
-  }
-  const title = inputTitle || autoTitle;
+  const todayLogs = idx.filter(l => l.date.startsWith(dateStr));
+  const title = inputTitle || `${dateStr} #${todayLogs.length + 1}`;
   const id = 'log_' + Date.now();
-  const entry = { id, title, date: dateStr, time: now.toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit'}) };
 
-  await storeSet(id, txt);
-  idx.unshift(entry); // 新しいものを先頭に
+  const fullLog = buildFullLog(title, now);
+  const entry = { id, title, date: dateStr, time: now.toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) };
+
+  await storeSet(id, fullLog);
+  idx.unshift(entry);
   await storeSet('ymir_log_index', idx);
 
   document.getElementById('log-title-input').value = '';
@@ -1529,7 +1842,7 @@ async function clearAllLogs() {
 
 function resetAll() {
   S.rawItems=[];S.mergedItems=[];S.participants=[];S.selectedNames=new Set();
-  S.groups=[];S.groupAssign={};S.enhanceAssign={};S.equipAssign={};S.finalAssign={};S.enhanceOrder=null;
+  S.groups=[];S.groupAssign={};S.enhanceAssign={};S.equipAssign={};S.finalAssign={};S.finalRounds=[];S.enhanceOrder=null;
   document.getElementById('item-input').value='';
   showPage('step1');
   renderParticipantGrid();
