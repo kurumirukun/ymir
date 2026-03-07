@@ -1153,7 +1153,7 @@ function renderStep5() {
   }
   // ラウンドが0件なら最初の1件を自動追加
   if (S.finalRounds.length === 0 && otherItems.length) {
-    S.finalRounds.push({ selectedKeys: new Set(), assign: {}, done: false });
+    S.finalRounds.push({ selectedKeys: new Set(), selectedMembers: new Set(S.participants), assign: {}, done: false });
   }
   renderFinalRounds();
 }
@@ -1371,7 +1371,7 @@ function addFinalRound() {
   const remaining = _remainingFinalPool();
   if (!remaining.length) { alert('残りアイテムがありません'); return; }
 
-  S.finalRounds.push({ selectedKeys: new Set(), assign: {}, done: false });
+  S.finalRounds.push({ selectedKeys: new Set(), selectedMembers: new Set(S.participants), assign: {}, done: false });
   renderFinalRounds();
 }
 
@@ -1439,18 +1439,39 @@ function renderFinalRounds() {
       </label>`;
     }).join('');
 
+    // メンバー選択UI
+    const memberRows = S.participants.map(id => {
+      const m = memberById(id);
+      const sel = round.selectedMembers ? round.selectedMembers.has(id) : true;
+      return `<label style="display:inline-flex;align-items:center;gap:5px;margin:3px 6px 3px 0;cursor:pointer">
+        <input type="checkbox" ${sel?'checked':''} onchange="toggleFinalMember(${ri},'${id}',this.checked)">
+        <span>${m?.name||id}${m?.job?` <span class='tag tag-job' style='font-size:9px'>${m.job}</span>`:''}</span>
+      </label>`;
+    }).join('');
+
     return `<div class="panel" style="margin-top:12px;border:1px solid var(--border)">
       <div class="panel-hd" style="justify-content:space-between">
         🎰 ラウンド ${ri+1}
         <button class="btn btn-danger btn-xs" onclick="removeFinalRound(${ri})">削除</button>
       </div>
-      <div style="margin-bottom:10px;font-size:12px;color:var(--dim2)">抽選するアイテムを選択してください</div>
+      <div style="margin-bottom:6px;font-size:12px;font-weight:700;color:var(--dim2)">👥 抽選対象メンバー</div>
+      <div style="margin-bottom:12px;padding:6px;background:var(--bg2);border-radius:6px">${memberRows}</div>
+      <div style="margin-bottom:6px;font-size:12px;font-weight:700;color:var(--dim2)">📦 抽選するアイテム</div>
       <div style="margin-bottom:12px">${itemRows || '<div class="empty">選択できるアイテムがありません</div>'}</div>
       <div class="lottery-wrap">
         <button class="btn-lottery" onclick="runFinalRound(${ri})">🎰 ラウンド ${ri+1} を実行！</button>
       </div>
     </div>`;
   }).join('');
+}
+
+function toggleFinalMember(ri, id, checked) {
+  const round = S.finalRounds[ri];
+  if (!round || round.done) return;
+  if (!round.selectedMembers) round.selectedMembers = new Set(S.participants);
+  if (checked) round.selectedMembers.add(id);
+  else round.selectedMembers.delete(id);
+  renderFinalRounds();
 }
 
 function toggleFinalItem(ri, name, checked) {
@@ -1491,6 +1512,11 @@ function runFinalRound(ri) {
   let pool = _allFinalPool().filter(it => round.selectedKeys.has(it._key));
   pool.sort((a, b) => b.price - a.price);
 
+  const targetMembers = round.selectedMembers && round.selectedMembers.size
+    ? [...round.selectedMembers]
+    : [...S.participants];
+  if (!targetMembers.length) { alert('抽選対象メンバーを選択してください'); return; }
+
   // 全ラウンドのweightSumを累積
   const weightSum = {};
   S.participants.forEach(id => weightSum[id] = 0);
@@ -1502,7 +1528,7 @@ function runFinalRound(ri) {
 
   round.assign = {};
   for (const item of pool) {
-    const winner = fairPickByWeight([...S.participants], weightSum);
+    const winner = fairPickByWeight(targetMembers, weightSum);
     if (!winner) continue;
     weightSum[winner] = (weightSum[winner] || 0) + (item.price || 1);
     if (!round.assign[winner]) round.assign[winner] = [];
